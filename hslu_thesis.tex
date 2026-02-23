@@ -384,6 +384,26 @@ The remainder of this thesis is organized as follows.
 %--------------------------------------------------------------
 % CHAPTER 2: MATHEMATICAL MODELING
 %--------------------------------------------------------------
+%--------------------------------------------------------------
+% CHAPTER 2: MATHEMATICAL MODELING — REVISED V3
+% Aligned with codebase commit 36f5b63 (2026-02-15)
+%
+% CHANGES FROM PREVIOUS VERSION:
+%  [C2-1] Bicycle model: rewritten to global-frame kinematic coupling
+%         variant with A_c(1,3)=vx, factor-of-2 cornering stiffness.
+%         Matches code lateral/vehicle/vehicle.py exactly.
+%  [C2-2] Vehicle parameters: updated to Audi TT Coupé values
+%         (m=1305, L=2.505, lf=lr=1.2525, etc.)
+%  [C2-3] Sampling rates: corrected to 100 Hz sim / 10 Hz long Nash /
+%         20 Hz lat Nash. Multi-rate section fully rewritten.
+%  [C2-4] Control constraints: a_min = -3.5 (matches Ch4 and code)
+%  [C2-5] Stanley controller: rewritten as linear PD with separate
+%         k_e and k_psi gains matching code values.
+%  [C2-6] Driver personality: Stanley gains updated to code values
+%         (0.003/0.005/0.008 for k_e, 0.3/0.5/0.7 for k_psi).
+%  [C2-7] Added note on per-tire vs per-axle cornering stiffness.
+%--------------------------------------------------------------
+
 \chapter{Mathematical Modeling}
 
 \section{Introduction}
@@ -392,7 +412,7 @@ This chapter presents the mathematical models of vehicle dynamics used in this t
 
 The longitudinal model employs a double-integrator representation that captures the essential relationship among acceleration, velocity, and position. This simple model is sufficient for platoon control because the primary dynamics of interest are the spacing and speed relationships between vehicles.
 
-The lateral model employs a bicycle model representation that captures the vehicle's response to steering inputs. This model accounts for tire slip angles and vehicle inertia, which are important for accurate lane-change trajectory tracking.
+The lateral model employs a bicycle model representation that captures the vehicle's response to steering inputs. This model accounts for tire slip angles and vehicle inertia, which are important for accurate lane-change trajectory tracking. We adopt the \textbf{global-frame} formulation of the bicycle model, in which the lateral position state $y$ represents the vehicle's absolute lateral displacement in the road coordinate system rather than a body-frame lateral velocity. This formulation includes a kinematic coupling term ($v_x \psi$) that directly relates heading deviations to lateral drift, making it particularly suitable for lane-change control where global lateral position is the primary quantity of interest.
 
 Both models are converted from continuous time to discrete time using a Zero-Order Hold (ZOH) discretization. This conversion is necessary because the control algorithms operate at fixed time intervals. The ZOH method assumes that the control input remains constant between sampling instants, which is consistent with the behavior of digital control systems.
 
@@ -467,7 +487,7 @@ Physical vehicles have limits on their acceleration and deceleration capabilitie
 a_{\min} \leq u \leq a_{\max}
 \label{eq:accel_constraints}
 \end{equation}
-where typical values are $a_{\min} = -3.0$ m/s² (comfortable braking) and $a_{\max} = 2.5$ m/s² (moderate acceleration).
+where $a_{\min} = -3.5$ m/s² (firm braking) and $a_{\max} = 2.5$ m/s² (moderate acceleration). The braking limit of $-3.5$ m/s² provides margin above emergency braking capability while remaining within the comfort range for assisted driving.
 
 For passenger comfort, we also consider jerk constraints. Jerk is the rate of change of acceleration:
 \begin{equation}
@@ -479,7 +499,7 @@ Comfortable jerk limits are typically $|j| \leq 2.0$ m/s³ for normal driving an
 
 \subsection{Sampling Rate Selection}
 
-The longitudinal controller operates at a sampling rate of 10 Hz ($\Delta t = 0.1$ seconds). This rate is chosen based on several considerations. First, it is fast enough to capture the relevant dynamics of vehicle following, where typical time constants are on the order of 1-2 seconds. Second, it provides sufficient time for the optimization solver to compute the control input. Third, it matches typical update rates used in commercial adaptive cruise control systems.
+The longitudinal controller operates at a sampling rate of 10 Hz ($\Delta t = 0.1$ seconds). This rate is chosen based on several considerations. First, it is fast enough to capture the relevant dynamics of vehicle following, where typical time constants are on the order of 1--2 seconds. Second, it provides sufficient time for the optimization solver to compute the control input. Third, it matches typical update rates used in commercial adaptive cruise control systems.
 
 At 10 Hz, the discrete matrices become:
 \begin{equation}
@@ -503,32 +523,41 @@ The state vector for the lateral model consists of four variables:
 \mathbf{x} = \begin{bmatrix} y \\ \dot{y} \\ \psi \\ \dot{\psi} \end{bmatrix}
 \label{eq:lat_state}
 \end{equation}
-where $y$ is the lateral position (perpendicular to the road centerline) in meters, $\dot{y}$ is the lateral velocity in meters per second, $\psi$ is the heading angle (yaw angle relative to the road) in radians, and $\dot{\psi}$ is the yaw rate in radians per second.
+where $y$ is the lateral position in the global road coordinate frame in meters, $\dot{y}$ is the lateral velocity in meters per second, $\psi$ is the heading angle (yaw angle relative to the road) in radians, and $\dot{\psi}$ is the yaw rate in radians per second.
 
-\subsection{Continuous-Time Equations}
+\subsection{Global-Frame Bicycle Model}
+\label{sec:global_frame_model}
+
+The standard bicycle model \cite{rajamani_vehicle_2005} describes the lateral dynamics in the body-fixed frame. For lane-change control, however, it is more natural to track the vehicle's absolute lateral position in the road coordinate system. We therefore adopt the \textbf{global-frame formulation}, in which the first state equation includes a kinematic coupling term that converts heading deviations into lateral drift.
 
 The equations of motion for the bicycle model are derived from Newton's second law for lateral translation and rotation \cite{rajamani_vehicle_2005, hoffmann_autonomous_2007}:
 \begin{align}
-m \ddot{y} &= F_{yf} + F_{yr} \label{eq:lat_force} \\
-I_z \ddot{\psi} &= a F_{yf} - b F_{yr} \label{eq:yaw_moment}
+m \ddot{y}_{\text{body}} &= F_{yf} + F_{yr} \label{eq:lat_force} \\
+I_z \ddot{\psi} &= l_f F_{yf} - l_r F_{yr} \label{eq:yaw_moment}
 \end{align}
-where $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, $F_{yf}$ and $F_{yr}$ are the lateral tire forces at the front and rear axles, and $a$ and $b$ are the distances from the center of gravity to the front and rear axles, respectively.
+where $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, $F_{yf}$ and $F_{yr}$ are the lateral tire forces at the front and rear axles, $l_f$ is the distance from the center of gravity (CG) to the front axle, and $l_r$ is the distance from the CG to the rear axle.
 
-For small slip angles, the tire forces are proportional to the slip angles:
+For small slip angles, the lateral tire forces are proportional to the slip angles. Here the cornering stiffness coefficients $C_f$ and $C_r$ represent the \textbf{per-tire} stiffness, so that the total axle force requires a factor of two to account for both left and right tires:
 \begin{align}
-F_{yf} &= -C_f \alpha_f \label{eq:front_tire} \\
-F_{yr} &= -C_r \alpha_r \label{eq:rear_tire}
+F_{yf} &= -2 C_f \alpha_f \label{eq:front_tire} \\
+F_{yr} &= -2 C_r \alpha_r \label{eq:rear_tire}
 \end{align}
-where $C_f$ and $C_r$ are the cornering stiffnesses of the front and rear tires, and $\alpha_f$ and $\alpha_r$ are the front and rear slip angles.
 
 The slip angles depend on the vehicle's motion and the steering angle:
 \begin{align}
-\alpha_f &= \frac{\dot{y} + a \dot{\psi}}{v_x} - \delta \label{eq:front_slip} \\
-\alpha_r &= \frac{\dot{y} - b \dot{\psi}}{v_x} \label{eq:rear_slip}
+\alpha_f &= \frac{\dot{y}_{\text{body}} + l_f \dot{\psi}}{v_x} - \delta \label{eq:front_slip} \\
+\alpha_r &= \frac{\dot{y}_{\text{body}} - l_r \dot{\psi}}{v_x} \label{eq:rear_slip}
 \end{align}
 where $\delta$ is the front wheel steering angle and $v_x$ is the longitudinal velocity.
 
-Substituting and rearranging, the state-space representation becomes:
+The global lateral position $y$ is related to the body-frame lateral velocity by:
+\begin{equation}
+\dot{y} = \dot{y}_{\text{body}} + v_x \sin\psi \approx \dot{y}_{\text{body}} + v_x \psi
+\label{eq:global_y}
+\end{equation}
+where the small-angle approximation $\sin\psi \approx \psi$ is valid for the heading angles encountered during controlled lane changes (typically $|\psi| < 2°$).
+
+Substituting the tire forces, slip angles, and the kinematic coupling into the state equations, the continuous-time state-space representation becomes:
 \begin{equation}
 \dot{\mathbf{x}} = A_c \mathbf{x} + B_c \delta
 \label{eq:lat_ss_continuous}
@@ -536,25 +565,28 @@ Substituting and rearranging, the state-space representation becomes:
 where the state matrix is:
 \begin{equation}
 A_c = \begin{bmatrix}
-0 & 1 & 0 & 0 \\
-0 & -\frac{C_f + C_r}{m v_x} & 0 & \frac{-v_x - \frac{a C_f - b C_r}{m v_x}}{1} \\
-0 & 0 & 0 & 1 \\
-0 & -\frac{a C_f - b C_r}{I_z v_x} & 0 & -\frac{a^2 C_f + b^2 C_r}{I_z v_x}
+0 & 1 & v_x & 0 \\[6pt]
+0 & -\dfrac{2(C_f + C_r)}{m v_x} & 0 & -v_x - \dfrac{2(l_f C_f - l_r C_r)}{m v_x} \\[6pt]
+0 & 0 & 0 & 1 \\[6pt]
+0 & -\dfrac{2(l_f C_f - l_r C_r)}{I_z v_x} & 0 & -\dfrac{2(l_f^2 C_f + l_r^2 C_r)}{I_z v_x}
 \end{bmatrix}
 \label{eq:Ac_lat}
 \end{equation}
 
 The input matrix is:
 \begin{equation}
-B_c = \begin{bmatrix} 0 \\ \frac{C_f}{m} \\ 0 \\ \frac{a C_f}{I_z} \end{bmatrix}
+B_c = \begin{bmatrix} 0 \\[4pt] \dfrac{2 C_f}{m} \\[4pt] 0 \\[4pt] \dfrac{2 l_f C_f}{I_z} \end{bmatrix}
 \label{eq:Bc_lat}
 \end{equation}
 
-Note that the state matrix $A_c$ depends on the longitudinal velocity $v_x$. This means that strictly speaking, the lateral model is a linear parameter-varying (LPV) system. For the MPC implementation, we update the matrices at each time step using the current velocity.
+\paragraph{Comparison with the body-frame formulation.}
+In the classical body-frame bicycle model \cite{rajamani_vehicle_2005}, the first state equation is $\dot{y}_{\text{body}} = \dot{y}_{\text{body}}$ (an identity), and the $A_c(1,3) = 0$ element reflects that heading does not directly enter the body-frame lateral velocity equation. In the global-frame formulation used here, $A_c(1,3) = v_x$ captures the kinematic coupling between heading and global lateral position. This means a small heading error $\psi$ produces a lateral drift rate of $v_x \psi$, which is precisely the physical behavior that must be tracked during lane changes. The $A_c(2,3) = 0$ entry (compared to $(C_f+C_r)/m$ in the body-frame version) results from the coordinate transformation and the use of per-tire cornering stiffness with the explicit factor of two.
+
+The state matrix $A_c$ depends on the longitudinal velocity $v_x$. This means that the lateral model is a linear parameter-varying (LPV) system. For the MPC implementation, we update the matrices at each control step using the current velocity.
 
 \subsection{Discrete-Time Representation}
 
-The continuous-time lateral model is converted to discrete-time using ZOH discretization. Unlike the double integrator, the bicycle model does not have simple analytical expressions for the discrete matrices. Instead, we compute them numerically using the matrix exponential method.
+The continuous-time lateral model is converted to discrete time using ZOH discretization. Unlike the double integrator, the bicycle model does not have simple analytical expressions for the discrete matrices. Instead, we compute them numerically using the matrix exponential method.
 
 The discrete state matrix is:
 \begin{equation}
@@ -572,25 +604,64 @@ This method is implemented using the \texttt{scipy.linalg.expm} function in Pyth
 
 \subsection{Vehicle Parameters}
 
-The bicycle model parameters used in this thesis are based on a typical passenger vehicle \cite{rajamani_vehicle_2005, fernandez_vehicle_nodate}. The vehicle mass is $m = 1500$ kg. The yaw moment of inertia is $I_z = 2500$ kg·m². The distance from the center of gravity to the front axle is $a = 1.2$ m. The distance from the center of gravity to the rear axle is $b = 1.4$ m. The total wheelbase is $L = a + b = 2.6$ m. The front cornering stiffness is $C_f = 80000$ N/rad. The rear cornering stiffness is $C_r = 80000$ N/rad.
+The bicycle model parameters are based on an Audi TT Coupé 2.0 TFSI (230~PS), chosen as a representative compact sports sedan \cite{rajamani_vehicle_2005, fernandez_vehicle_nodate}. Table~\ref{tab:vehicle_params_ch2} summarizes the parameters used in the simulation.
 
-These parameters correspond to a front-wheel-drive sedan with a slightly rear-biased weight distribution, typical of vehicles with the engine in front.
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Parameter} & \textbf{Symbol} & \textbf{Value} \\
+\hline
+Vehicle mass (kerb) & $m$ & 1305 kg \\
+Yaw moment of inertia & $I_z$ & 2500 kg$\cdot$m² \\
+Wheelbase & $L$ & 2.505 m \\
+CG to front axle & $l_f$ & 1.2525 m \\
+CG to rear axle & $l_r$ & 1.2525 m \\
+Front cornering stiffness (per tire) & $C_f$ & 80,000 N/rad \\
+Rear cornering stiffness (per tire) & $C_r$ & 80,000 N/rad \\
+Overall length & --- & 4.177 m \\
+Overall width & --- & 1.832 m \\
+Maximum steering angle & $\delta_{\max}$ & $25°$ (0.436 rad) \\
+Maximum steering rate & $\dot{\delta}_{\max}$ & $15°$/s (0.262 rad/s) \\
+Nominal velocity & $v_x$ & 20 m/s (72 km/h) \\
+\hline
+\end{tabular}
+\caption{Vehicle parameters based on the Audi TT Coupé 2.0 TFSI}
+\label{tab:vehicle_params_ch2}
+\end{table}
+
+The symmetric CG position ($l_f = l_r = L/2$) produces neutral steer characteristics, which simplifies the dynamics (several $l_f C_f - l_r C_r$ terms vanish when $l_f = l_r$ and $C_f = C_r$). The cornering stiffness values of 80,000~N/rad per tire are representative of high-performance road tires on a vehicle of this class.
 
 \subsection{Sampling Rate Selection}
 
-The lateral controller operates at a sampling rate of 50 Hz ($\Delta t = 0.02$ seconds). This higher rate compared to the longitudinal controller is necessary because the lateral dynamics have faster time constants. Yaw dynamics, in particular, can change rapidly, especially at higher speeds.
+The vehicle dynamics simulation runs at 100~Hz ($\Delta t_{\text{sim}} = 0.01$~s), which provides high-fidelity integration of the bicycle model. The lateral Nash MPC controller operates at a lower rate of 20~Hz ($\Delta t_{\text{Nash}} = 0.05$~s), meaning the optimization is solved every fifth simulation step. Between Nash updates, the most recent steering command is held constant (zero-order hold).
 
-At highway speeds (30 m/s), the characteristic time constants of the bicycle model are approximately 0.1-0.3 seconds. The 50 Hz sampling rate provides 5-15 samples per time constant, which is sufficient for accurate control.
+The 20~Hz Nash rate was chosen as a compromise between computational cost and control bandwidth. At the nominal velocity of 20~m/s, the bicycle model's dominant yaw time constant is approximately 0.15--0.3~s, and the 20~Hz rate provides 3--6 control updates per time constant, which is sufficient for accurate trajectory tracking.
 
 \section{Multi-Rate Control Architecture}
 
-The longitudinal and lateral controllers operate at different rates: 10 Hz for longitudinal and 50 Hz for lateral. This multi-rate architecture is implemented as follows.
+The longitudinal and lateral controllers operate at different rates within a three-level timing hierarchy:
 
-Both controllers run in parallel. The longitudinal controller updates every 100 ms to compute a new acceleration command. The lateral controller updates every 20 ms to compute a new steering command. Between longitudinal updates, the lateral controller uses the most recent acceleration command from the longitudinal controller.
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|l|}
+\hline
+\textbf{Layer} & \textbf{Rate} & $\Delta t$ & \textbf{Function} \\
+\hline
+Vehicle dynamics & 100 Hz & 0.01 s & State integration (both axes) \\
+Lateral Nash MPC & 20 Hz & 0.05 s & Steering optimization \\
+Longitudinal Nash MPC & 10 Hz & 0.10 s & Acceleration optimization \\
+\hline
+\end{tabular}
+\caption{Multi-rate control architecture}
+\label{tab:multi_rate}
+\end{table}
 
-The controllers share state information through the vehicle state vector, which is updated at the faster rate (50 Hz). This ensures that both controllers have access to the most recent position, velocity, and heading information.
+Both controllers run in parallel. The longitudinal controller updates every 100~ms to compute a new acceleration command. The lateral controller updates every 50~ms to compute a new steering command. Between control updates, the respective commands are held constant.
 
-The multi-rate architecture has several advantages. It allows each controller to operate at a rate appropriate for its dynamics. It reduces computational load by avoiding unnecessary high rates of longitudinal optimization. It aligns with the typical architecture of production vehicle control systems, in which different subsystems operate at different rates.
+The controllers share state information through the vehicle state vector, which is updated at the fastest rate (100~Hz). This ensures that both controllers have access to the most recent position, velocity, and heading information.
+
+The multi-rate architecture has several advantages. It allows each controller to operate at a rate appropriate for its dynamics. It reduces computational load by avoiding unnecessary high-rate longitudinal optimization. It aligns with the typical architecture of production vehicle control systems, in which different subsystems operate at different rates.
 
 \section{Human Driver Models}
 
@@ -612,36 +683,53 @@ where $s_0$ is the minimum gap at standstill, $T$ is the desired time headway, $
 
 The IDM parameters are adjusted based on driver personality type: cautious drivers exhibit larger time headways and lower maximum accelerations, whereas aggressive drivers exhibit smaller time headways and higher maximum accelerations.
 
-\subsection{Lateral: Stanley Controller}
+\subsection{Lateral: Modified Stanley Controller}
+\label{sec:stanley_controller}
 
-To model the human driver's lateral behavior during lane changes, we use the Stanley controller \cite{thrun_stanley_2006, abdelmoniem_path-tracking_2020}. The Stanley controller was developed for the Stanford Racing Team's autonomous vehicle and is known for producing smooth, human-like steering behavior.
+To model the human driver's lateral behavior during lane changes, we use a modified version of the Stanley controller \cite{thrun_stanley_2006, abdelmoniem_path-tracking_2020}. The classical Stanley controller combines heading error correction with a nonlinear cross-track error term. In our implementation, we adopt a \textbf{linear proportional-derivative (PD) formulation} that is better suited to integration with the Nash equilibrium framework, where linearity of the human model improves convergence:
 
-The Stanley steering command is:
 \begin{equation}
-\delta = \psi_e + \arctan\left( \frac{k_e \cdot e}{v_x} \right)
-\label{eq:stanley}
+\delta_{\text{human}} = -k_e \cdot e_y - k_\psi \cdot e_\psi
+\label{eq:stanley_modified}
 \end{equation}
-where $\psi_e$ is the heading error relative to the path, $e$ is the cross-track error (lateral distance from the path), $k_e$ is the cross-track gain, and $v_x$ is the longitudinal velocity.
+where $e_y = y - y_{\text{ref}}$ is the lateral position error, $e_\psi = \psi - \psi_{\text{ref}}$ is the heading angle error, $k_e$ is the cross-track gain, and $k_\psi$ is the heading gain.
 
-The Stanley controller combines two correction terms. The first term ($\psi_e$) corrects the heading to align with the path. The second term corrects the lateral position, with the $\arctan$ function ensuring that the correction is bounded even for large errors. The velocity in the denominator indicates that at higher speeds, smaller steering corrections are required to achieve the same lateral error, which aligns with human driving behavior.
+This formulation preserves the two-term structure of the Stanley controller (position correction plus heading correction) while replacing the nonlinear $\arctan(k_e \cdot e / v_x)$ term with a linear gain. The linear form is appropriate for lane-change control because the errors are small enough that the $\arctan$ function operates in its approximately linear region. The separate heading gain $k_\psi$ provides independent control of heading response, which is important for passenger comfort during lane changes.
 
-As shown by Hoffmann et al. \cite{hoffmann_autonomous_2007}, the Stanley controller is globally asymptotically stable for path following, meaning that the vehicle converges to the desired path from any initial condition.
+The steering output is saturated at the vehicle's physical steering limit ($\pm 25°$) and low-pass filtered ($\alpha = 0.2$) to prevent abrupt corrections.
 
 \subsection{Driver Personality Types}
 
-We model three types of human drivers with different parameter settings. The cautious driver has IDM time headway $T = 2.0$ s, comfortable deceleration $b = 1.5$ m/s², and Stanley gain $k_e = 1.5$. The normal driver has an IDM time headway $T = 1.5$ s, a comfortable deceleration $b = 2.0$ m/s², and a Stanley gain $k_e = 2.5$. The aggressive driver has IDM time headway $T = 1.0$ s, comfortable deceleration $b = 2.5$ m/s², and Stanley gain $k_e = 3.5$.
+We model three types of human drivers with different parameter settings, summarized in Table~\ref{tab:driver_personality}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|c|c|c|}
+\hline
+\textbf{Driver Type} & \textbf{IDM $T$ [s]} & \textbf{IDM $b$ [m/s²]} & \textbf{Stanley $k_e$} & \textbf{Stanley $k_\psi$} \\
+\hline
+Cautious   & 2.0 & 1.5 & 0.003 & 0.3 \\
+Normal     & 1.5 & 2.0 & 0.005 & 0.5 \\
+Aggressive & 1.0 & 2.5 & 0.008 & 0.7 \\
+\hline
+\end{tabular}
+\caption{Human driver personality parameters}
+\label{tab:driver_personality}
+\end{table}
+
+The small magnitude of $k_e$ (order $10^{-3}$) reflects the fact that steering angles are measured in radians while lateral errors are measured in meters. At a typical cross-track error of 1~m, the normal driver produces a steering correction of $-0.005 \times 1.0 = -0.005$~rad ($\approx 0.3°$), which is a realistic, gentle correction consistent with human driving behavior at highway speeds. The heading gain $k_\psi$ is three orders of magnitude larger, reflecting the importance of heading alignment: a heading error of $1°$ ($\approx 0.017$~rad) produces a steering correction of $-0.5 \times 0.017 = -0.009$~rad ($\approx 0.5°$).
 
 These personality types affect the reference trajectories generated for the human driver in the Nash game formulation. A cautious driver's reference will exhibit larger gaps and slower lane changes, whereas an aggressive driver's reference will exhibit smaller gaps and faster lane changes.
 
 \section{Summary}
 
-This chapter presented the mathematical models used for vehicle dynamics in this thesis. The longitudinal model is a double integrator with state variables for position and velocity, discretized at 10 Hz using ZOH. The lateral model is a 4-state bicycle model capturing lateral position, lateral velocity, heading, and yaw rate, discretized at 50 Hz using ZOH.
+This chapter presented the mathematical models used for vehicle dynamics in this thesis. The longitudinal model is a double integrator with state variables for position and velocity, discretized at 10~Hz using ZOH. The lateral model is a 4-state bicycle model in the global-frame formulation, capturing lateral position, lateral velocity, heading, and yaw rate. The global-frame model includes a kinematic coupling term ($v_x \psi$) that directly relates heading errors to lateral drift, making it well suited for lane-change control. Vehicle dynamics are simulated at 100~Hz, with the lateral Nash MPC operating at 20~Hz and the longitudinal Nash MPC at 10~Hz.
 
-Both models are formulated in state-space form suitable for Model Predictive Control. The discrete-time formulations enable efficient implementation in the Nash equilibrium solver described in Chapter 4.
+Both models are formulated in state-space form suitable for Model Predictive Control. The discrete-time formulations enable efficient implementation in the Nash equilibrium solver described in Chapter~4.
 
-Human driver behavior is modeled using the Intelligent Driver Model for longitudinal control and the Stanley Controller for lateral control. Three personality types (cautious, normal, and aggressive) are defined through different parameter settings.
+Human driver behavior is modeled using the Intelligent Driver Model for longitudinal control and a modified Stanley Controller (linear PD formulation) for lateral control. Three personality types (cautious, normal, and aggressive) are defined through different parameter settings, with the Stanley gains reflecting realistic steering magnitudes at highway speeds.
 
-The multi-rate architecture allows each controller to operate at a rate appropriate for its dynamics while sharing state information through a common vehicle state vector.
+The multi-rate architecture allows each controller to operate at a rate appropriate for its dynamics while sharing state information through a common vehicle state vector updated at 100~Hz.
 
 %--------------------------------------------------------------
 % END OF CHAPTER 2
@@ -762,7 +850,7 @@ s = s_{\text{base}} \cdot m_{\text{pos}} \cdot \left(1 + \alpha_v \cdot \frac{v_
 \label{eq:dynamic_radius_impl}
 \end{equation}
 
-where $s_{\text{base}} = 10$ m is the base safety radius, $\alpha_v = 0.8$ is the velocity scaling factor, and $v_{\text{ref}} = 120$ m/s is the reference velocity. The position multiplier $m_{\text{pos}}$ takes values of 0.8 when the ego vehicle is at the front of the platoon in the leader position, 1.2 when the ego is in the middle of the platoon, and 1.0 when the ego is at the back in the follower position:
+where $s_{\text{base}} = 10$ m is the base safety radius, $\alpha_v = 0.8$ is the velocity scaling factor, and $v_{\text{ref}} = 120$ km/h ($\approx 33.3$ m/s) is the reference velocity corresponding to the platoon cruise speed. The position multiplier $m_{\text{pos}}$ takes values of 0.8 when the ego vehicle is at the front of the platoon in the leader position, 1.2 when the ego is in the middle of the platoon, and 1.0 when the ego is at the back in the follower position:
 
 \begin{equation}
 m_{\text{pos}} = \begin{cases}
@@ -958,7 +1046,7 @@ Phase transitions follow similar logic to longitudinal control, with conditions 
 |\dot{y}| &< \dot{y}_{\text{threshold}} \label{eq:lat_following_ydot}
 \end{align}
 
-where $\gamma_y = 0.15$, $W_{\text{lane}} = 3.5$ m, $\psi_{\text{threshold}} = 0.05$ rad (approximately 3\SI{2}{\degree}), and $\dot{y}_{\text{threshold}} = 0.3$ m/s, all sustained for 5 seconds.
+where $\gamma_y = 0.15$, $W_{\text{lane}} = 3.5$ m, $\psi_{\text{threshold}} = 0.05$ rad (approximately $\SI{3}{\degree}$), and $\dot{y}_{\text{threshold}} = 0.3$ m/s, all sustained for 5 seconds.
 
 \textbf{Exit from FOLLOWING:}
 \begin{align}
@@ -1067,31 +1155,61 @@ with $\alpha_f = 0.3$ and saturation at $\pm 500$ N.
 
 \subsection{Authority Allocation Mechanism}
 
-The safety field force directly influences the Nash equilibrium through the authority allocation mechanism. The authority ratio $\lambda$ is computed from the field force using a lookup table derived from Li et al. \cite{li_shared_2019}:
+The safety field force directly influences the Nash equilibrium through the authority allocation mechanism. The authority ratio $\lambda$ determines the relative weighting between the system controller and the human driver in the Nash cost functions.
+
+\subsubsection{Safety-Based Authority (Sigmoid)}
+
+The baseline authority is computed from the safety field force magnitude using a sigmoid function:
+\begin{equation}
+\lambda_{\text{safety}} = \lambda_{\min} + (\lambda_{\max} - \lambda_{\min}) \cdot \sigma(|F|)
+\label{eq:authority_sigmoid}
+\end{equation}
+where $\sigma(|F|) = \frac{1}{1 + e^{-k(|F| - F_0)}}$ is the sigmoid function with steepness $k = 0.015$ N$^{-1}$ and midpoint $F_0 = 400$ N. The authority bounds are $\lambda_{\min} = 0.1$ (human dominant when safe) and $\lambda_{\max} = 100$ (system dominant during emergencies).
+
+Table~\ref{tab:authority_mapping} shows representative values of the sigmoid mapping.
 
 \begin{table}[h]
 \centering
-\begin{tabular}{|c|c|c|c|}
+\begin{tabular}{|c|c|c|}
 \hline
-\textbf{Force [N]} & \textbf{$\ln(\lambda)$} & \textbf{$\lambda$} & \textbf{System Authority [\%]} \\
+\textbf{Force $|F|$ [N]} & \textbf{$\lambda_{\text{safety}}$} & \textbf{System Authority [\%]} \\
 \hline
-$-400$ & $-4.27$ & 0.014 & 1.4 \\
-$-200$ & $-3.56$ & 0.028 & 2.7 \\
-$0$ & $-1.78$ & 0.169 & 14.5 \\
-$100$ & $-0.83$ & 0.436 & 30.4 \\
-$200$ & $0.00$ & 1.000 & 50.0 \\
-$300$ & $0.63$ & 1.878 & 65.3 \\
-$500$ & $2.21$ & 9.116 & 90.1 \\
-$800$ & $4.23$ & 68.717 & 98.6 \\
+$0$ & 0.12 & 11 \\
+$200$ & 0.83 & 45 \\
+$400$ & 50.1 & 98 \\
+$600$ & 97.3 & 99 \\
+$800$ & 99.8 & 99.9 \\
 \hline
 \end{tabular}
-\caption{Authority allocation mapping from safety field force}
+\caption{Authority allocation: sigmoid mapping from safety field force}
 \label{tab:authority_mapping}
 \end{table}
 
-The system authority $\alpha$ is computed from $\lambda$:
+\subsubsection{Performance-Based Authority with Hysteresis}
+
+In addition to safety-based authority, a performance component responds to large gap errors that do not yet generate safety field forces (e.g., the vehicle is far from its target but not near any obstacle). To prevent oscillation at mode boundaries, hysteresis logic is employed:
 \begin{equation}
-\alpha = \frac{\lambda}{1 + \lambda}
+\text{Performance mode} = \begin{cases}
+\texttt{ON} & \text{if previously OFF and } |e_{\text{gap}}| > e_{\text{enter}} \\
+\texttt{OFF} & \text{if previously ON and } |e_{\text{gap}}| < e_{\text{exit}} \\
+\text{unchanged} & \text{otherwise}
+\end{cases}
+\label{eq:hysteresis}
+\end{equation}
+where $e_{\text{enter}} = 3.0$ m and $e_{\text{exit}} = 1.0$ m. When performance mode is active, $\lambda_{\text{performance}}$ increases progressively with gap error, capped at 50.
+
+\subsubsection{Authority Fusion and Smoothing}
+
+The final authority ratio is the maximum of the two components, followed by exponential smoothing:
+\begin{align}
+\lambda_{\text{target}} &= \max(\lambda_{\text{safety}}, \lambda_{\text{performance}}) \label{eq:authority_fusion} \\
+\lambda[k] &= \alpha \cdot \lambda_{\text{target}} + (1 - \alpha) \cdot \lambda[k-1] \label{eq:authority_smoothing}
+\end{align}
+where $\alpha \in [\alpha_{\text{base}}, \alpha_{\text{fast}}] = [0.05, 0.12]$ adapts based on the gap error magnitude: faster smoothing for large errors (quick response) and slower smoothing for small errors (comfort).
+
+The system authority weight is computed from $\lambda$:
+\begin{equation}
+\alpha_{\text{sys}} = \frac{\lambda}{1 + \lambda}
 \label{eq:authority_alpha}
 \end{equation}
 
@@ -1113,7 +1231,7 @@ This separation ensures that normal operation relies on Nash for smooth, optimal
 
 The \textbf{Longitudinal Safety Field} has time complexity $O(1)$ since a constant number of vehicles are considered. The update rate is 10 Hz, matching the longitudinal controller, and the typical computation time is under 1 ms.
 
-The \textbf{Lateral Safety Field} has time complexity $O(N_{\text{obs}})$ where $N_{\text{obs}}$ is the number of obstacles. The update rate is 50 Hz, matching the lateral controller, with typical computation time under 0.5 ms for 3-5 obstacles.
+The \textbf{Lateral Safety Field} has time complexity $O(N_{\text{obs}})$ where $N_{\text{obs}}$ is the number of obstacles. The update rate is 20 Hz, matching the lateral Nash MPC controller, with typical computation time under 0.5 ms for 3--5 obstacles.
 
 \subsection{Numerical Stability}
 
@@ -1170,8 +1288,6 @@ Transition time $T_{\text{stable}}$ & 5 s & 5 s \\
 \caption{Summary of safety field parameters}
 \label{tab:safety_params_summary}
 \end{table}
-
-Chapter 4 describes the complete Nash game formulation, the DPP-compliant solver architecture, and the authority allocation mechanism.
 
 %--------------------------------------------------------------
 % CHAPTER 4: GAME-THEORETIC FRAMEWORK — CORRECTED VERSION V2
