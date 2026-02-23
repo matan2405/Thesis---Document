@@ -181,9 +181,6 @@ The simulation results demonstrate that the proposed approach enables safe and c
 \nomenclature{$I_z$}{Yaw moment of inertia [kg·m$^2$]}
 \nomenclature{$L$}{Vehicle length [m]}
 
-%--------------------------------------------------------------
-% CHAPTER 1: INTRODUCTION (CONTINUOUS PROSE VERSION)
-%--------------------------------------------------------------
 \chapter{Introduction}
 
 \section{Background}
@@ -263,7 +260,7 @@ A key contribution of this thesis is the dynamic computation of the lane change 
 T_{lc,\min} = \frac{1.875 \cdot |\Delta y|}{v_x \cdot \tan(\psi_{\max})}
 \label{eq:T_lc_min}
 \end{equation}
-where $\Delta y$ is the lane change distance, $v_x$ is the longitudinal velocity, and the factor 1.875 comes from the maximum of the quintic polynomial's derivative. This constraint ensures the heading angle stays within comfortable limits (typically $\psi_{\max} < 2\SI{2}{\degree}$) throughout the maneuver.
+where $\Delta y$ is the lane change distance, $v_x$ is the longitudinal velocity, and the factor 1.875 comes from the maximum of the quintic polynomial's derivative. This constraint ensures the heading angle stays within comfortable limits (typically $\psi_{\max} < \SI{2}{\degree}$) throughout the maneuver.
 
 \subsection{Safety Field Theory}
 
@@ -347,17 +344,17 @@ The eighth objective is to \textbf{validate through comprehensive simulation}. W
 
 This thesis makes the following contributions.
 
-The first contribution is a \textbf{DPP-Compliant Nash Equilibrium Solver}. We develop an optimized Nash solver using Disciplined Parameterized Programming (DPP). The key innovation is to reformulate the Nash game as a single stacked QP in which the quadratic cost matrix $P$ is constant (computed once at initialization) and only the linear term $q$ updates at each time step. This enables CVXPY to cache the problem structure, achieving a solve time of approximately 2 ms (compared to 56 ms for iterative methods), combined longitudinal and lateral control in less than 4 ms total, and real-time capability at 10 Hz (longitudinal) and 50 Hz (lateral) update rates.
+The first contribution is a \textbf{DPP-Compliant Nash Equilibrium Solver}. We develop an optimized Nash solver using Disciplined Parameterized Programming (DPP). The key innovation is to reformulate the Nash game as a single stacked QP in which the quadratic cost matrix $P$ is constant (computed once at initialization) and only the linear term $q$ updates at each time step. This enables CVXPY to cache the problem structure, achieving a solve time of approximately 2 ms (compared to 56 ms for iterative methods), combined longitudinal and lateral control in less than 4 ms total, and real-time capability at 10 Hz (longitudinal) and 20 Hz (lateral) update rates.
 
 The second contribution is \textbf{the $S = R$ Cooperation Principle}. We discover that the relationship between cross-coupling weights ($S$) and control effort weights ($R$) fundamentally determines the nature of the Nash equilibrium. When $S < R$, controllers compete against each other, causing oscillations. When $S = R$, controllers cooperate, achieving smooth convergence. When $S > R$, controllers become overly deferential, losing effectiveness. Setting $S_1 = R_1$ and $S_2 = R_2$ ensures cooperative behavior and is essential for practical implementation.
 
 The third contribution is \textbf{Phase Detection with Hysteresis}. We develop a dynamic phase-detection system that transitions between operating modes based on the actual system state rather than fixed timers. Entry to the FOLLOWING phase requires a gap error less than 15\% of the desired gap, a relative velocity less than 5\% of the target velocity, and all conditions stable for 5 seconds. Exit from FOLLOWING requires a gap error greater than 25\% or a relative velocity greater than 10\% (hysteresis prevents oscillation). Soft transitions provide a gradual reduction in force as errors decrease, thereby preventing sudden control changes.
 
-The fourth contribution is a \textbf{Bidirectional Longitudinal Safety Field}. We extend the safety field concept to handle risks from both directions during platoon merging. This includes leader force (repulsive force preventing collision with vehicle ahead), follower force (weighted force maintaining safe distance from vehicle behind), asymmetric weighting (follower weight $w_f \in [0.3, 0.7]$ reflects forward-dominant CACC information flow), and dynamic adaptation (parameters adjust based on TTC, gap size, and platoon context).
+The fourth contribution is a \textbf{Bidirectional Longitudinal Safety Field}. We extend the safety field concept to handle risks from both directions during platoon merging. This includes leader force (repulsive force preventing collision with vehicle ahead), follower force (weighted force maintaining safe distance from vehicle behind), asymmetric weighting (follower weight $w_f \in [0.2, 0.5]$ reflects forward-dominant CACC information flow), and dynamic adaptation (parameters adjust based on TTC, gap size, and platoon context).
 
-The fifth contribution is \textbf{Lateral Control with Stanley-Based Human Model}. We adapt the Nash framework to lateral control using a 4-state bicycle model with states $[y, \dot{y}, \psi, \dot{\psi}]$ and proper zero-order hold discretization. We employ a Stanley controller for human-driver modeling with personality-dependent gains. Different reference trajectories are employed: a 5th-order polynomial for the system (8 seconds) and a 3rd-order polynomial for the human (5-7 seconds depending on driver type). Heading priority ($Q_\psi \gg Q_y$) ensures stability by controlling heading angle first.
+The fifth contribution is \textbf{Lateral Control with Stanley-Based Human Model}. We adapt the Nash framework to lateral control using a 4-state global-frame bicycle model with states $[y, \dot{y}, \psi, \dot{\psi}]$ and proper zero-order hold discretization. We employ a modified Stanley controller (linear PD formulation) for human-driver modeling with personality-dependent gains. Different reference trajectories are employed: a 5th-order polynomial for the system (14 seconds base duration) and a 3rd-order polynomial for the human (10--14 seconds depending on driver type). Heading priority ($Q_\psi \gg Q_y$) ensures stability by controlling heading angle first.
 
-The sixth contribution is a \textbf{Unified Control Architecture}. We design both longitudinal and lateral controllers with consistent structure using the same Nash/DMPC framework with DPP-compliant solvers, the same phase detection mechanism (MERGING to FOLLOWING), the same authority allocation based on safety field force, the same soft transition functions for smooth mode changes, and a multi-rate architecture (10 Hz longitudinal, 50 Hz aural).
+The sixth contribution is a \textbf{Unified Control Architecture}. We design both longitudinal and lateral controllers with consistent structure using the same Nash/DMPC framework with DPP-compliant solvers, the same phase detection mechanism (MERGING to FOLLOWING), the same authority allocation based on safety field force, the same soft transition functions for smooth mode changes, and a multi-rate architecture (100~Hz dynamics simulation, 10~Hz longitudinal Nash, 20~Hz lateral Nash).
 
 The seventh contribution is a \textbf{Comprehensive Simulation Framework}. We develop a comprehensive Python simulation framework comprising 11 modules totaling over 5,100 lines of code, real-time visualization with trajectory plots and Nash analysis, automated testing across all 9 scenario combinations, and quantitative metrics, including collision rate (0%), TTC, jerk, and authority distribution.
 
@@ -383,25 +380,6 @@ The remainder of this thesis is organized as follows.
 %--------------------------------------------------------------
 %--------------------------------------------------------------
 % CHAPTER 2: MATHEMATICAL MODELING
-%--------------------------------------------------------------
-%--------------------------------------------------------------
-% CHAPTER 2: MATHEMATICAL MODELING — REVISED V3
-% Aligned with codebase commit 36f5b63 (2026-02-15)
-%
-% CHANGES FROM PREVIOUS VERSION:
-%  [C2-1] Bicycle model: rewritten to global-frame kinematic coupling
-%         variant with A_c(1,3)=vx, factor-of-2 cornering stiffness.
-%         Matches code lateral/vehicle/vehicle.py exactly.
-%  [C2-2] Vehicle parameters: updated to Audi TT Coupé values
-%         (m=1305, L=2.505, lf=lr=1.2525, etc.)
-%  [C2-3] Sampling rates: corrected to 100 Hz sim / 10 Hz long Nash /
-%         20 Hz lat Nash. Multi-rate section fully rewritten.
-%  [C2-4] Control constraints: a_min = -3.5 (matches Ch4 and code)
-%  [C2-5] Stanley controller: rewritten as linear PD with separate
-%         k_e and k_psi gains matching code values.
-%  [C2-6] Driver personality: Stanley gains updated to code values
-%         (0.003/0.005/0.008 for k_e, 0.3/0.5/0.7 for k_psi).
-%  [C2-7] Added note on per-tire vs per-axle cornering stiffness.
 %--------------------------------------------------------------
 
 \chapter{Mathematical Modeling}
@@ -1292,24 +1270,6 @@ Transition time $T_{\text{stable}}$ & 5 s & 5 s \\
 %--------------------------------------------------------------
 % CHAPTER 4: GAME-THEORETIC FRAMEWORK — CORRECTED VERSION V2
 %--------------------------------------------------------------
-% ================================================================
-%  CHANGE LOG  (Thesis-System Alignment Validator)
-%  Date: 2026-02-10
-%  Compared: hslu_thesis.tex (a4f22f8) vs codebase (13d4577, cd263fa,
-%            96193265, 72ded07, 8102453, 11d8e97)
-% ================================================================
-%
-%  V2 ADDITIONS over V1:
-%  [NEW-1] Full lateral controller formulation with bicycle model,
-%          separate weight tables, driver-type modifiers, heading
-%          constraint derivation.
-%  [NEW-2] Comprehensive academic citations using existing .bib keys.
-%  [NEW-3] Explicit comparison tables between longitudinal and lateral.
-%  [NEW-4] Lateral authority allocator (simpler sigmoid + rate limit).
-%  [NEW-5] Lateral reference generators (quintic system, cubic human).
-%
-%  All previous V1 corrections [C1]-[C17] remain applied.
-% ================================================================
 
 \chapter{Game-Theoretic Framework}
 \label{ch:game_theory}
@@ -1378,22 +1338,22 @@ Both players apply acceleration to the same vehicle, so $\mathbf{B}_1 = \mathbf{
 \subsection{Lateral Dynamics: Bicycle Model}
 \label{sec:lateral_dynamics}
 
-The lateral dynamics use a linear bicycle model~\cite{rajamani_vehicle_2005} with state $\mathbf{x} = [y, \dot{y}, \psi, \dot{\psi}]^T$ (lateral position, lateral velocity, heading angle, yaw rate) and control input $\delta$ (front-wheel steering angle). The continuous-time state-space matrices are:
+The lateral dynamics use the global-frame bicycle model (Section~\ref{sec:global_frame_model}) with state $\mathbf{x} = [y, \dot{y}, \psi, \dot{\psi}]^T$ (lateral position, lateral velocity, heading angle, yaw rate) and control input $\delta$ (front-wheel steering angle). The continuous-time state-space matrices are:
 \begin{equation}
 \mathbf{A}_c = \begin{bmatrix}
-0 & 1 & 0 & 0 \\
-0 & -\frac{C_f + C_r}{m v_x} & \frac{C_f + C_r}{m} & -\frac{L_f C_f - L_r C_r}{m v_x} \\
-0 & 0 & 0 & 1 \\
-0 & -\frac{L_f C_f - L_r C_r}{I_z v_x} & \frac{L_f C_f - L_r C_r}{I_z} & -\frac{L_f^2 C_f + L_r^2 C_r}{I_z v_x}
+0 & 1 & v_x & 0 \\[4pt]
+0 & -\dfrac{2(C_f + C_r)}{m v_x} & 0 & -v_x - \dfrac{2(L_f C_f - L_r C_r)}{m v_x} \\[4pt]
+0 & 0 & 0 & 1 \\[4pt]
+0 & -\dfrac{2(L_f C_f - L_r C_r)}{I_z v_x} & 0 & -\dfrac{2(L_f^2 C_f + L_r^2 C_r)}{I_z v_x}
 \end{bmatrix}
 \label{eq:Ac_bicycle}
 \end{equation}
 \begin{equation}
-\mathbf{B}_c = \begin{bmatrix} 0 \\ C_f / m \\ 0 \\ L_f C_f / I_z \end{bmatrix}
+\mathbf{B}_c = \begin{bmatrix} 0 \\ 2C_f / m \\ 0 \\ 2L_f C_f / I_z \end{bmatrix}
 \label{eq:Bc_bicycle}
 \end{equation}
 
-where $C_f$ and $C_r$ are the front and rear cornering stiffness coefficients, $L_f$ and $L_r$ are the distances from the center of gravity to the front and rear axles, $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, and $v_x$ is the longitudinal velocity (assumed constant within each prediction horizon)~\cite{rajamani_vehicle_2005, fernandez_vehicle_nodate}.
+where $C_f$ and $C_r$ are the per-tire cornering stiffness coefficients (multiplied by 2 for the axle total), $L_f$ and $L_r$ are the distances from the center of gravity to the front and rear axles, $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, and $v_x$ is the longitudinal velocity (assumed constant within each prediction horizon)~\cite{rajamani_vehicle_2005, fernandez_vehicle_nodate}. The $A_c(1,3) = v_x$ term represents the kinematic coupling between heading and global lateral position, as described in Chapter~2.
 
 Discretization is performed using the matrix exponential method~\cite{rajamani_vehicle_2005}:
 \begin{equation}
@@ -1418,17 +1378,17 @@ The vehicle parameters used in the bicycle model are summarized in Table~\ref{ta
 \hline
 \textbf{Parameter} & \textbf{Symbol} & \textbf{Value} \\
 \hline
-Vehicle mass & $m$ & 1500 kg \\
+Vehicle mass (kerb) & $m$ & 1305 kg \\
 Yaw moment of inertia & $I_z$ & 2500 kg$\cdot$m$^2$ \\
-Wheelbase & $L$ & 2.7 m \\
-CG to front axle & $L_f$ & 1.2 m \\
-CG to rear axle & $L_r$ & 1.5 m \\
-Front cornering stiffness & $C_f$ & 80,000 N/rad \\
-Rear cornering stiffness & $C_r$ & 80,000 N/rad \\
+Wheelbase & $L$ & 2.505 m \\
+CG to front axle & $L_f$ & 1.2525 m \\
+CG to rear axle & $L_r$ & 1.2525 m \\
+Front cornering stiffness (per tire) & $C_f$ & 80,000 N/rad \\
+Rear cornering stiffness (per tire) & $C_r$ & 80,000 N/rad \\
 Nominal longitudinal velocity & $v_x$ & 20 m/s \\
 \hline
 \end{tabular}
-\caption{Vehicle parameters for the bicycle model~\cite{rajamani_vehicle_2005}}
+\caption{Vehicle parameters for the bicycle model (Audi TT Coupé, see Table~\ref{tab:vehicle_params_ch2})}
 \label{tab:vehicle_params}
 \end{table}
 
@@ -1516,7 +1476,7 @@ These weights are orders of magnitude larger than the longitudinal weights becau
 
 \subsection{Scale Separation Between Domains}
 
-The difference in weight magnitudes between the longitudinal and lateral controllers arises from the physical scales of the respective control inputs. For the longitudinal domain, typical accelerations are $\sim 2$~m/s$^2$, while for the lateral domain, typical steering angles are $\sim 0.01$~rad ($\approx 0.6\SI{2}{\degree}$). To achieve similar relative penalties, the control effort weights must scale inversely with the square of the typical input magnitude. This is why $R^{\text{lat}} / R^{\text{long}} \approx 1250$, roughly matching $(2/0.01)^2 \cdot (800 / 1{,}000{,}000)^{-1}$.
+The difference in weight magnitudes between the longitudinal and lateral controllers arises from the physical scales of the respective control inputs. For the longitudinal domain, typical accelerations are $\sim 2$~m/s$^2$, while for the lateral domain, typical steering angles are $\sim 0.01$~rad ($\approx \SI{0.6}{\degree}$). To achieve similar relative penalties, the control effort weights must scale inversely with the square of the typical input magnitude. This is why $R^{\text{lat}} / R^{\text{long}} \approx 1250$, roughly matching $(2/0.01)^2 \cdot (800 / 1{,}000{,}000)^{-1}$.
 
 Direct copying of weight values between domains without this scaling would produce either negligible control effort (if longitudinal weights were used for lateral) or excessive, saturating control (if lateral weights were used for longitudinal).
 
@@ -1756,13 +1716,13 @@ Rate constraints limit the change per time step to ensure comfort~\cite{rajamani
 |u_i[k+j] - u_i[k+j-1]| \leq \Delta u_{i,\max} \cdot T_s
 \label{eq:long_rate}
 \end{equation}
-with $\Delta u_{1,\max} = 1.0$~m/s$^3$ and $\Delta u_{2,\max} = 1.5$~m/s$^3$.
+with $\Delta u_{1,\max} = 1.5$~m/s$^3$ and $\Delta u_{2,\max} = 2.0$~m/s$^3$.
 
 \subsubsection{Lateral Constraints}
 
 Steering angle bounds~\cite{rajamani_vehicle_2005}:
 \begin{equation}
--0.4 \leq \delta_i \leq 0.4 \text{ rad} \quad (\approx \pm 23\SI{2}{\degree})
+-0.436 \leq \delta_i \leq 0.436 \text{ rad} \quad (\approx \pm 25°)
 \label{eq:lat_bounds}
 \end{equation}
 
@@ -1771,7 +1731,7 @@ Steering rate constraint:
 |\delta_i[k+j] - \delta_i[k+j-1]| \leq \dot{\delta}_{\max} \cdot T_s
 \label{eq:lat_rate}
 \end{equation}
-with $\dot{\delta}_{\max} = 0.5$~rad/s. This ensures smooth steering transitions consistent with passenger comfort expectations.
+with $\dot{\delta}_{\max} = 0.262$~rad/s ($15°$/s). This value corresponds to the Audi TT steering system specification and ensures smooth steering transitions consistent with passenger comfort expectations.
 
 \subsection{Complete Algorithm}
 
@@ -1815,7 +1775,7 @@ The system reference maintains a safe following distance using the Constant Time
 d_{\text{des}}[k] = d_0 + h \cdot v_{\text{ego}}[k]
 \label{eq:ctg_spacing_v1}
 \end{equation}
-where $d_0 = 5$~m is the standstill distance and $h = 1.0$~s is the time headway. The reference over the prediction horizon is:
+where $d_0 = 5$~m is the standstill distance and $h = 1.5$~s is the time headway. The reference over the prediction horizon is:
 \begin{align}
 p_{\text{ref},1}[k+j] &= p_{\text{leader}}[k+j] - d_{\text{des}}[k+j] \label{eq:long_ref_pos}\\
 v_{\text{ref},1}[k+j] &= v_{\text{leader}}[k+j] \label{eq:long_ref_vel}
@@ -1855,7 +1815,7 @@ T_{\text{lc}} \geq \frac{1.875 \, |\Delta y|}{v_x \tan(\psi_{\max})}
 \label{eq:Tlc_constraint}
 \end{equation}
 
-With $\psi_{\max} = 1.8\SI{2}{\degree}$ (providing margin below the \SI{2}{\degree} requirement), $|\Delta y| = 3.5$~m (one lane width), and $v_x = 20$~m/s, this yields $T_{\text{lc}} \geq 10.4$~s. The implementation uses $T_{\text{lc}} = 14$~s as the base duration, which is dynamically increased if the heading constraint requires it.
+With $\psi_{\max} = \SI{1.82}{\degree}$ (providing margin below the $\SI{2}{\degree}$ requirement), $|\Delta y| = 3.5$~m (one lane width), and $v_x = 20$~m/s, this yields $T_{\text{lc}} \geq 10.4$~s. The implementation uses $T_{\text{lc}} = 14$~s as the base duration, which is dynamically increased if the heading constraint requires it.
 
 The heading reference is set to zero throughout: $\psi_{\text{ref},1} = 0$.
 
@@ -1916,15 +1876,15 @@ $|\Lambda|$ & 8 levels & 7 levels \\
 Authority sources & Safety + Performance & Safety only \\
 Smoothing & Adaptive EMA & Fixed EMA + rate limit \\
 \hline
-Input bounds & $[-3.5, 2.5]$ m/s$^2$ & $\pm 0.4$ rad \\
-Rate limit & 1.0 / 1.5 m/s$^3$ & 0.5 rad/s \\
+Input bounds & $[-3.5, 2.5]$ m/s$^2$ & $\pm 0.436$ rad ($\pm 25°$) \\
+Rate limit & 1.5 / 2.0 m/s$^3$ & 0.262 rad/s (15°/s) \\
 \hline
 System ref.\ & CTG spacing~\cite{rajamani_vehicle_2005} & Quintic polynomial~\cite{gu_toward_2014} \\
 Human ref.\ & Forward simulation & Cubic polynomial \\
 Driver types & Via reference only & Via $R_2$, $S_2$, $Q_y$ modifiers \\
 \hline
 OSQP tol. & $10^{-4}$ & $10^{-3}$ \\
-OSQP max iter. & 1000 & 200 \\
+OSQP max iter. & 200 & 200 \\
 Typical solve time & 2--3 ms & 2--3 ms \\
 \hline
 \end{tabular}
@@ -1953,9 +1913,9 @@ This chapter presented the complete game-theoretic framework for shared control 
 \hline
 \textbf{Parameter} & \textbf{Longitudinal} & \textbf{Lateral} \\
 \hline
-Prediction horizon $N_p$ & 20 (2.0 s) & 20 (2.0 s) \\
-Control horizon $N_u$ & 10 (1.0 s) & 10 (1.0 s) \\
-Time step $T_s$ & 0.1 s & 0.1 s \\
+Prediction horizon $N_p$ & 20 (2.0 s) & 20 (1.0 s) \\
+Control horizon $N_u$ & 10 (1.0 s) & 10 (0.5 s) \\
+Time step $T_s$ & 0.1 s & 0.05 s \\
 \hline
 $Q_{1,1}$ (pos / $y$) & 2500 & 10 \\
 $Q_{1,2}$ (vel / $\psi$) & 50 & 10,000 \\
@@ -1971,7 +1931,7 @@ Rate limit & N/A & $+0.02$, $-0.01$ per step \\
 \hline
 Regularization $\epsilon_{\text{reg}}$ & $10^{-5}$ & $10^{-5}$ \\
 OSQP $\epsilon_{\text{abs}}$, $\epsilon_{\text{rel}}$ & $10^{-4}$ & $10^{-3}$ \\
-OSQP max iter. & 1000 & 200 \\
+OSQP max iter. & 200 & 200 \\
 \hline
 \end{tabular}
 \caption{Complete parameter summary for both Nash equilibrium solvers}
