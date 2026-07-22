@@ -77,7 +77,7 @@ A Distributed Model Predictive Control Approach with\\
 Dynamic Authority Allocation}
 \author{Matan Sason}
 \date{\today}
-\usepackage[style=ieee, backend=biber]{biblatex}
+\usepackage[style=ieee]{biblatex}
 \addbibresource{references.bib}
 %--------------------------------------------------------------
 % BEGIN DOCUMENT
@@ -186,26 +186,22 @@ The simulation results demonstrate that the proposed approach enables safe and c
 
 \section{Background}
 
-Autonomous vehicles are becoming increasingly common on public roads. In the coming years, we expect to see both human-driven vehicles and autonomous vehicles sharing the same roads. This situation, known as mixed traffic, creates new challenges for traffic management and vehicle control systems.
+Human-driven and autonomous vehicles will share public roads for decades before full autonomy arrives on scale. Vehicle platooning is a coordinated driving formation in which multiple vehicles travel in close succession under automated spacing control. It offers one of the clearest near-term benefits of this mixed-traffic environment: reduced aerodynamic drag for following vehicles and higher lane throughput per kilometer of road. The difficulty is in entering. A human-driven vehicle that wishes to join an operating platoon must reconcile its driver's intentions with the platoon's automated spacing logic. This thesis develops a game-theoretic shared-control framework, grounded in Nash equilibrium theory, for exactly that problem.
 
-One promising technology is vehicle platooning, in which a group of vehicles travels together in a coordinated manner. Platooning offers significant benefits, including reduced fuel consumption, increased road capacity, and improved safety. However, a critical challenge remains: how can a human-driven vehicle safely join an autonomous platoon?
-
-This thesis addresses this challenge by developing a game-theoretic control framework that enables safe and comfortable merging of human-driven vehicles into autonomous platoons. The framework uses Nash equilibrium theory to balance the competing objectives of the autonomous safety system and the human driver.
 
 \subsection{Vehicle Platooning}
 
-Vehicle platooning is a driving formation in which multiple vehicles travel closely together at highway speeds. Vehicles maintain safe distances through coordinated control and communication. This approach offers several benefits: reduced fuel consumption through lower air resistance due to drafting effects (which can reduce fuel use by 10-15\% for following vehicles), increased road capacity through smaller following distances that allow more vehicles per kilometer of road, and improved safety through coordinated braking and communication that reduce reaction times and collision risk.
+Vehicle platooning is a driving formation in which multiple vehicles travel closely together at highway speeds, maintaining safe inter-vehicle distances through coordinated control and V2V communication \cite{treiberTrafficFlowDynamics2013}. Drafting reduces fuel consumption by 10--15\% for following vehicles, and smaller following distances allow more vehicles per kilometre of road. Coordinated braking reduces reaction times and lowers collision risk.
 
-Cooperative Adaptive Cruise Control (CACC) is the technology that enables platooning \cite{treiberTrafficFlowDynamics2013}. CACC systems use Vehicle-to-Vehicle (V2V) communication to share information such as speed, acceleration, and braking intentions. Information sharing enables vehicles to respond more quickly than human drivers and to maintain safer following distances.
-
-The desired spacing policy in CACC systems follows the Constant Time Gap (CTG) model \cite{rajamani_vehicle_2005}:
+Cooperative Adaptive Cruise Control (CACC) is the enabling technology \cite{rajamani_vehicle_2005}. CACC systems exchange speed, acceleration, and braking intentions over Vehicle-to-Vehicle (V2V) links, allowing vehicles to respond faster than human reaction times permit. The desired inter-vehicle gap follows the Constant Time Gap (CTG) policy:
 \begin{equation}
 d_{\text{des}} = d_0 + h \cdot v
 \label{eq:ctg_spacing_v2}
 \end{equation}
-where $d_0$ is the standstill distance (typically 5 meters), $h$ is the time headway (typically 0.8-1.2 seconds), and $v$ is the current velocity. This policy ensures that the following distance increases with speed, providing appropriate safety margins.
+where $d_0 = 2$\,m is the standstill distance, $h = 1.5$\,s is the time headway, and $v$ is the current vehicle speed. The gap therefore grows linearly with speed, providing appropriate safety margins at all operating conditions.
 
-However, most CACC systems assume that all vehicles in the platoon are fully autonomous. This assumption does not align with the reality of mixed traffic, in which human-driven vehicles must interact with autonomous platoons. The merging of a human-driven vehicle into an autonomous platoon is a complex problem that requires careful consideration of both safety and human factors.
+Most CACC systems assume all platoon members are fully autonomous. This assumption breaks down in mixed traffic, where a human-driven vehicle must negotiate entry into an operating platoon. Safe merging requires explicit handling of both the human driver's intent and the platoon's automated spacing logic, a problem that neither conventional CACC nor standard autonomous control addresses directly.
+
 
 \subsection{Shared Control Systems}
 
