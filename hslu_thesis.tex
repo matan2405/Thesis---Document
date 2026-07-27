@@ -548,203 +548,296 @@ limitations of the current work, and identifies directions for future research.
 
 \section{Introduction}
 
-This chapter presents the mathematical models of vehicle dynamics used in this thesis. The control system requires accurate yet computationally efficient models that can run in real-time. We develop two separate models: a longitudinal model for forward motion control and a lateral model for steering control during lane changes.
+This chapter describes the vehicle-dynamics models used throughout the thesis. A distinction is drawn between the \emph{plant model}, which governs the simulation, and the \emph{controller models}, which the Nash solvers use for prediction.
 
-The longitudinal model employs a double-integrator representation that captures the essential relationship among acceleration, velocity, and position. This simple model is sufficient for platoon control because the primary dynamics of interest are the spacing and speed relationships between vehicles.
+The plant is a nonlinear six-degree-of-freedom model derived from Belousov
+\cite{belousovDevelopmentVehicleSimulation}. It integrates the coupled longitudinal, lateral, and yaw dynamics by fourth-order Runge Kutta at \SI{100}{Hz}, with a
+parabolic tire force law (Rajamani \cite{rajamaniVehicleDynamicsControl2005},
+Eq.~13.45) calibrated to the Audi TT Coup\'{e} 2.0~TFSI. This model constitutes the
+ground truth against which all control outputs are evaluated.
 
-The lateral model employs a bicycle model representation that captures the vehicle's response to steering inputs. This model accounts for tire slip angles and vehicle inertia, which are important for accurate lane-change trajectory tracking. We adopt the \textbf{global-frame} formulation of the bicycle model, in which the lateral position state $y$ represents the vehicle's absolute lateral displacement in the road coordinate system rather than a body-frame lateral velocity. This formulation includes a kinematic coupling term ($v_x \psi$) that directly relates heading deviations to lateral drift, making it particularly suitable for lane-change control where global lateral position is the primary quantity of interest.
+The Nash solvers operate on reduced linear models that are rebuit at each control step
+from the current operating point. The longitudinal solver uses a double-integrator
+state-space model with state $[x,\, v_x]^\top$, discretized at \SI{10}{Hz}. The
+lateral solver uses a two-degree-of-freedom bicycle model with state
+$[y,\, \dot{y},\, \psi,\, \dot{\psi}]^\top$, discretized at \SI{20}{Hz}. Both
+controller models are derived by linearizing the plant around the current speed and
+applying a Zero-Order Hold (ZOH) discretization.
 
-Both models are converted from continuous time to discrete time using a Zero-Order Hold (ZOH) discretization. This conversion is necessary because the control algorithms operate at fixed time intervals. The ZOH method assumes that the control input remains constant between sampling instants, which is consistent with the behavior of digital control systems.
+Section~\ref{sec:plant} presents the plant model. Sections~\ref{sec:long_model}
+and~\ref{sec:lat_model} derive the two controller models. Section~\ref{sec:multirate}
+describes the multi-rate timing architecture.
 
-\section{Longitudinal Vehicle Model}
+\section{Plant Model}
+\label{sec:plant}
+
+The simulation plant is a nonlinear six-degree-of-freedom (6-DOF) vehicle model
+derived from Belousov \cite{belousovDevelopmentVehicleSimulation}. The state vector
+is
+\begin{equation}
+\mathbf{s} = \bigl[x,\; v_x,\; y,\; v_y,\; \psi,\; \dot\psi\bigr]^\top
+\label{eq:plant_state}
+\end{equation}
+where $x$ is the longitudinal position, $v_x$ the longitudinal speed, $y$ the
+lateral position, $v_y$ the body-frame lateral velocity, $\psi$ the yaw angle, and
+$\dot\psi$ the yaw rate. All quantities are expressed in the vehicle body frame.
+
+\subsection{Equations of Motion}
+
+The equations of motion follow Belousov Eqs.~3.11a--c:
+\begin{align}
+m_{\text{eff}}\,\dot v_x &= F_{x,c}\cos\delta - F_{yf}\sin\delta - F_{x,r}
+\label{eq:plant_long} \\
+m\,\dot v_y              &= F_{yf}\cos\delta + F_{yr} + F_{xf,c}\sin\delta
+                            - f_v\,v_x\dot\psi
+\label{eq:plant_lat} \\
+I_z\,\ddot\psi           &= l_f\bigl(F_{yf}\cos\delta + F_{xf,c}\sin\delta\bigr)
+                            - l_r F_{yr}
+\label{eq:plant_yaw}
+\end{align}
+where $F_{x,c}$ is the net contact-patch longitudinal force, $F_{x,r}$ collects
+body-level resistances (aerodynamic drag, rolling resistance, road grade), $F_{xf,c}$
+is the front-axle contact force, $\delta$ is the front-wheel steer angle, $m$ is the
+vehicle mass, and $m_{\text{eff}} = m + I_w/r^2$ (Belousov Eq.~3.8) augments the
+inertia with the rotational inertia of the driven wheels referred to the vehicle body.
+The factor $f_v = \tfrac{1}{2}(\tanh(10|v_x|-8)+1)$ gates the centripetal coupling
+terms so that they decay smoothly to zero near standstill, where the body-frame
+velocity states lose physical meaning.
+
+The world-frame lateral position and its rate are recovered by the kinematic relations
+\begin{equation}
+\dot y = -(v_x\sin\psi + v_y\cos\psi), \qquad
+y = x_0 - x
+\label{eq:plant_world_y}
+\end{equation}
+where $x_0$ is the lateral spawn coordinate.
+
+\subsection{Tire Model}
+
+Lateral tire forces are computed from the parabolic pressure-distribution model of
+Rajamani \cite{rajamaniVehicleDynamicsControl2005}, Eq.~13.45:
+\begin{equation}
+F_y(\alpha) =
+\begin{cases}
+\mu F_z\!\left(3\theta\tan\alpha - 3\theta^2\tan^2\!\alpha + \theta^3\tan^3\!\alpha\right)
+  & |\tan\alpha| \leq 1/\theta \\
+\operatorname{sgn}(\alpha)\,\mu F_z & |\tan\alpha| > 1/\theta
+\end{cases}
+\label{eq:tire_parabolic}
+\end{equation}
+where $\theta = C_\alpha/(3\mu F_z)$, $C_\alpha$ is the per-wheel cornering
+stiffness, $\mu = 0.8$ is the road friction coefficient, $F_z$ is the wheel normal
+load, and $\alpha$ is the tire slip angle. The model recovers a linear
+force law $F_y \approx C_\alpha\alpha$ for small $\alpha$ and saturates at
+$\mu F_z$ under full sliding.
+
+The Audi TT Coup\'{e} 2.0~TFSI is front-wheel-drive with a 62/38 front-to-rear mass
+distribution. Applying the Pacejka rule ($C_\alpha \approx 9.2\,F_{z,\text{wheel}}$)
+to the nominal axle loads gives asymmetric per-wheel cornering stiffnesses:
+\begin{equation}
+C_{af} = 36\,500\ \text{N/rad}, \qquad C_{ar} = 22\,300\ \text{N/rad}
+\label{eq:tire_stiffness}
+\end{equation}
+These values are consistent with the compact FWD range reported in Rajamani
+\cite{rajamaniVehicleDynamicsControl2005}, Ch.~2.
+
+\subsection{Numerical Integration}
+
+The 6-DOF state is advanced by fourth-order Runge Kutta (RK4) at \SI{100}{Hz}
+($\Delta t_{\text{sim}} = 0.01$~s). RK4 is chosen over Euler integration because the
+stiff tire-yaw coupling in Eqs.~\eqref{eq:plant_lat}--\eqref{eq:plant_yaw} causes
+first-order methods to diverge at this step size for the vehicle parameters used.
+
+\subsection{Linearization for Nash Solvers}
+
+At each Nash control step, the plant provides linearized Jacobians that the solvers
+use to build their prediction models. The longitudinal Jacobian (method
+\texttt{GetLongJacobian}) linearizes Eq.~\eqref{eq:plant_long} around the current
+operating point ($\delta \approx 0$, $\dot\psi \approx 0$) with feedforward
+cancellation of drag and rolling resistance, yielding the double-integrator structure
+described in Section~\ref{sec:long_model}. The lateral Jacobian (method
+\texttt{GetLatJacobian}) linearizes Eqs.~\eqref{eq:plant_lat}--\eqref{eq:plant_yaw}
+around straight driving, yielding the bicycle-model structure described in
+Section~\ref{sec:lat_model}. Both Jacobians are recomputed at every solver invocation
+to track changes in $v_x$.
+
+\section{Longitudinal Controller Model}
+\label{sec:long_model}
+
+The longitudinal Nash solver operates on a linearized double-integrator model
+obtained from \texttt{GetLongJacobian()} at each control step. The state vector is
+\begin{equation}
+\mathbf{x}_{\text{long}} = \begin{bmatrix} x \\ v_x \end{bmatrix}
+\label{eq:long_state}
+\end{equation}
+where $x$ is the longitudinal position and $v_x$ is the longitudinal speed.
 
 \subsection{Continuous-Time Representation}
 
-Newton's second law can describe the longitudinal motion of a vehicle. The vehicle's acceleration is given by the net force acting on it divided by its mass. For control purposes, we treat acceleration as the control input, thereby simplifying the model while retaining the essential dynamics.
-
-The state vector for the longitudinal model consists of position and velocity:
+Linearizing Eq.~\eqref{eq:plant_long} around straight driving ($\delta \approx 0$,
+$\dot\psi \approx 0$) with feedforward cancellation of drag and rolling resistance
+yields
 \begin{equation}
-\mathbf{x} = \begin{bmatrix} x \\ v_x \end{bmatrix}
-\label{eq:long_state}
-\end{equation}
-where $x$ is the longitudinal position in meters and $v_x$ is the longitudinal velocity in meters per second.
-
-The continuous-time state-space representation is:
-\begin{equation}
-\dot{\mathbf{x}} = A_c \mathbf{x} + B_c u
+\dot{\mathbf{x}}_{\text{long}} = A_c\,\mathbf{x}_{\text{long}} + B_c\,u
 \label{eq:long_continuous}
 \end{equation}
-where the state matrix and input matrix are:
+where the control input $u = a_{\text{des}}$ is the desired longitudinal acceleration
+in m/s² and
 \begin{equation}
-A_c = \begin{bmatrix} 0 & 1 \\ 0 & 0 \end{bmatrix}, \quad
+A_c = \begin{bmatrix} 0 & 1 \\ 0 & -d_{\text{lin}} \end{bmatrix}, \quad
 B_c = \begin{bmatrix} 0 \\ 1 \end{bmatrix}
 \label{eq:long_matrices_continuous}
 \end{equation}
+The term $d_{\text{lin}} = \rho C_d A_f |v_x| / m_{\text{eff}}$ is the
+linearized aerodynamic drag coefficient at the current speed. At highway speeds
+($v_x = 20$~m/s) this evaluates to $d_{\text{lin}} \approx 0.02$~s$^{-1}$, which is
+small relative to the closed-loop bandwidth; the model therefore reduces to the
+standard double integrator $A_c = \bigl[\begin{smallmatrix}0&1\\0&0\end{smallmatrix}\bigr]$
+to good approximation.
 
-The control input $u$ is the longitudinal acceleration $a_x$ in meters per second squared. The output equation is:
+The output equation is:
 \begin{equation}
-\mathbf{y} = C \mathbf{x} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} \mathbf{x}
+\mathbf{y} = C\,\mathbf{x}_{\text{long}} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
+\mathbf{x}_{\text{long}}
 \label{eq:long_output}
 \end{equation}
-which means both position and velocity are available as outputs.
-
-This model is known as a double integrator because integrating acceleration yields velocity, and integrating velocity yields position. The double integrator is a fundamental building block in control theory and has well-understood properties \cite{rajamani_vehicle_2005}.
+so both position and velocity are available as outputs for Nash cost evaluation.
 
 \subsection{Discrete-Time Representation}
 
-For digital implementation, we convert the continuous-time model to discrete time using a Zero-Order Hold (ZOH) discretization. The ZOH method assumes that the control input remains constant during each sampling interval $\Delta t$.
-
-The discrete-time state equation is:
+Zero-Order Hold (ZOH) discretization at $\Delta t = 0.1$~s yields
 \begin{equation}
-\mathbf{x}[k+1] = A_d \mathbf{x}[k] + B_d u[k]
+\mathbf{x}_{\text{long}}[k+1] = A_d\,\mathbf{x}_{\text{long}}[k] + B_d\,u[k]
 \label{eq:long_discrete}
 \end{equation}
-
-For the double-integrator system, ZOH discretization yields analytical expressions for the discrete matrices. The discrete state matrix is obtained from the matrix exponential:
-\begin{equation}
-A_d = e^{A_c \Delta t} = \begin{bmatrix} 1 & \Delta t \\ 0 & 1 \end{bmatrix}
-\label{eq:Ad_long}
-\end{equation}
-
-The discrete input matrix is:
-\begin{equation}
-B_d = \int_0^{\Delta t} e^{A_c \tau} d\tau \cdot B_c = \begin{bmatrix} \frac{\Delta t^2}{2} \\ \Delta t \end{bmatrix}
-\label{eq:Bd_long}
-\end{equation}
-
-These matrices have a clear physical interpretation. The state update equation expands to:
-\begin{align}
-x[k+1] &= x[k] + v_x[k] \cdot \Delta t + \frac{1}{2} a_x[k] \cdot \Delta t^2 \label{eq:pos_update} \\
-v_x[k+1] &= v_x[k] + a_x[k] \cdot \Delta t \label{eq:vel_update}
-\end{align}
-
-These are the standard kinematic equations for motion with constant acceleration during each time step. The position update includes the $\frac{1}{2} a_x \Delta t^2$ term, which accounts for the fact that the velocity changes during the interval. This term is often omitted in simpler Euler discretization methods, but the ZOH method correctly captures this effect.
-
-\subsection{Control Constraints}
-
-Physical vehicles have limits on their acceleration and deceleration capabilities. We impose the following constraints on the control input:
-\begin{equation}
-a_{\min} \leq u \leq a_{\max}
-\label{eq:accel_constraints}
-\end{equation}
-where $a_{\min} = -3.5$ m/s² (firm braking) and $a_{\max} = 2.5$ m/s² (moderate acceleration). The braking limit of $-3.5$ m/s² provides margin above emergency braking capability while remaining within the comfort range for assisted driving.
-
-For passenger comfort, we also consider jerk constraints. Jerk is the rate of change of acceleration:
-\begin{equation}
-j = \frac{da_x}{dt} \approx \frac{a_x[k] - a_x[k-1]}{\Delta t}
-\label{eq:jerk}
-\end{equation}
-
-Comfortable jerk limits are typically $|j| \leq 2.0$ m/s³ for normal driving and $|j| \leq 5.0$ m/s³ for emergency maneuvers.
-
-\subsection{Sampling Rate Selection}
-
-The longitudinal controller operates at a sampling rate of 10 Hz ($\Delta t = 0.1$ seconds). This rate is chosen based on several considerations. First, it is fast enough to capture the relevant dynamics of vehicle following, where typical time constants are on the order of 1--2 seconds. Second, it provides sufficient time for the optimization solver to compute the control input. Third, it matches typical update rates used in commercial adaptive cruise control systems.
-
-At 10 Hz, the discrete matrices become:
+with
 \begin{equation}
 A_d = \begin{bmatrix} 1 & 0.1 \\ 0 & 1 \end{bmatrix}, \quad
 B_d = \begin{bmatrix} 0.005 \\ 0.1 \end{bmatrix}
 \label{eq:Ad_Bd_10Hz}
 \end{equation}
+These matrices correspond to the kinematic updates
+\begin{align}
+z[k+1]   &= z[k] + v_x[k]\,\Delta t + \tfrac{1}{2}\,u[k]\,\Delta t^2
+\label{eq:pos_update} \\
+v_x[k+1] &= v_x[k] + u[k]\,\Delta t
+\label{eq:vel_update}
+\end{align}
+
+\subsection{Control Constraints}
+\label{sec:long_constraints}
+
+The Nash solver enforces two levels of constraints. The first level is a wide solver
+ceiling imposed as box constraints on the OSQP quadratic program:
+\begin{equation}
+u \in [-20,\; 10]\ \text{m/s}^2, \qquad
+|\Delta u| \leq 15\ \text{m/s}^2\text{/step}
+\label{eq:long_solver_box}
+\end{equation}
+These bounds are deliberately wide: they act as numerical guardrails rather than
+comfort limits. The second level consists of physical bounds computed at each tick
+from the current vehicle state via \texttt{UpdatePhysicalBounds()}, which clips the
+commanded acceleration to what the powertrain and brake system can actually deliver.
+
+For the human player, the inter-step rate cap is tighter:
+\begin{equation}
+|\Delta u_2| \leq 2.0\ \text{m/s}^2\text{/step}\ \rightarrow\ 0.2\ \text{m/s}^2\text{/s}\ \text{at 10\,Hz}
+\label{eq:long_human_jerk}
+\end{equation}
+This cap prevents inter-step oscillations in $u_2^*$ while preserving the Nash
+game's freedom to assign a nonzero human control. Comfort shaping beyond this hard
+cap is handled through the $R_2$ weight schedule described in
+Chapter~\ref{ch:nash_framework}.
 
 \section{Lateral Vehicle Model}
+\label{sec:lat_vehicle_model}
 
 \subsection{The Bicycle Model}
 
-For lateral dynamics, we use a simplified vehicle model known as the bicycle model or single-track model \cite{rajamani_vehicle_2005}. This model combines the two front wheels into a single wheel at the front axle centerline, and similarly for the rear wheels. The bicycle model is widely used in vehicle dynamics and control because it captures the essential lateral behavior while remaining computationally tractable.
+The lateral dynamics of the ego vehicle are described by the standard single-track bicycle
+model \cite{rajamaniVehicleDynamicsControl2005}. The equations of motion follow from Newton's second law
+for lateral translation and yaw rotation:
+\begin{align}
+m \ddot{y}_{\text{b}} &= F_{yf} + F_{yr} \label{eq:lat_force} \\
+I_z \ddot{\psi}        &= l_f F_{yf} - l_r F_{yr} \label{eq:yaw_moment}
+\end{align}
+where $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, $F_{yf}$ and $F_{yr}$
+are the lateral tire forces at the front and rear axles, $l_f$ is the distance from the
+centre of gravity to the front axle, and $l_r$ is the distance from the centre of gravity
+to the rear axle.
 
-The bicycle model assumptions are: the vehicle moves on a flat, horizontal surface; the left and right tire forces are combined into single forces at each axle; tire slip angles are small enough that the lateral force is proportional to slip angle (linear tire model); and the vehicle's roll and pitch motions are neglected.
+The plant model integrates these equations using a load-dependent nonlinear tire force
+function. For the Nash solver, which requires a linear state-space model for QP
+construction, the equations of motion are linearized at the current longitudinal
+velocity $v_x$.
 
 \subsection{State Variables}
 
-The state vector for the lateral model consists of four variables:
+The state vector is defined in the global frame as
+$\mathbf{x} = [y,\; \dot{y}_{\text{b}},\; \psi,\; \dot{\psi}]^{\top}$,
+where $y$ is the global lateral position, $\dot{y}_{\text{b}}$ is the body-frame lateral
+velocity, $\psi$ is the heading angle, and $\dot{\psi}$ is the yaw rate. The global lateral
+position is related to the body-frame lateral velocity by
 \begin{equation}
-\mathbf{x} = \begin{bmatrix} y \\ \dot{y} \\ \psi \\ \dot{\psi} \end{bmatrix}
-\label{eq:lat_state}
-\end{equation}
-where $y$ is the lateral position in the global road coordinate frame in meters, $\dot{y}$ is the lateral velocity in meters per second, $\psi$ is the heading angle (yaw angle relative to the road) in radians, and $\dot{\psi}$ is the yaw rate in radians per second.
-
-\subsection{Global-Frame Bicycle Model}
-\label{sec:global_frame_model}
-
-The standard bicycle model \cite{rajamani_vehicle_2005} describes the lateral dynamics in the body-fixed frame. For lane-change control, however, it is more natural to track the vehicle's absolute lateral position in the road coordinate system. We therefore adopt the \textbf{global-frame formulation}, in which the first state equation includes a kinematic coupling term that converts heading deviations into lateral drift.
-
-The equations of motion for the bicycle model are derived from Newton's second law for lateral translation and rotation \cite{rajamani_vehicle_2005, hoffmannAutonomousAutomobileTrajectory2007}:
-\begin{align}
-m \ddot{y}_{\text{body}} &= F_{yf} + F_{yr} \label{eq:lat_force} \\
-I_z \ddot{\psi} &= l_f F_{yf} - l_r F_{yr} \label{eq:yaw_moment}
-\end{align}
-where $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, $F_{yf}$ and $F_{yr}$ are the lateral tire forces at the front and rear axles, $l_f$ is the distance from the center of gravity (CG) to the front axle, and $l_r$ is the distance from the CG to the rear axle.
-
-For small slip angles, the lateral tire forces are proportional to the slip angles. Here the cornering stiffness coefficients $C_f$ and $C_r$ represent the \textbf{per-tire} stiffness, so that the total axle force requires a factor of two to account for both left and right tires:
-\begin{align}
-F_{yf} &= -2 C_f \alpha_f \label{eq:front_tire} \\
-F_{yr} &= -2 C_r \alpha_r \label{eq:rear_tire}
-\end{align}
-
-The slip angles depend on the vehicle's motion and the steering angle:
-\begin{align}
-\alpha_f &= \frac{\dot{y}_{\text{body}} + l_f \dot{\psi}}{v_x} - \delta \label{eq:front_slip} \\
-\alpha_r &= \frac{\dot{y}_{\text{body}} - l_r \dot{\psi}}{v_x} \label{eq:rear_slip}
-\end{align}
-where $\delta$ is the front wheel steering angle and $v_x$ is the longitudinal velocity.
-
-The global lateral position $y$ is related to the body-frame lateral velocity by:
-\begin{equation}
-\dot{y} = \dot{y}_{\text{body}} + v_x \sin\psi \approx \dot{y}_{\text{body}} + v_x \psi
+\dot{y} \approx \dot{y}_{\text{b}} + v_x \psi
 \label{eq:global_y}
 \end{equation}
-where the small-angle approximation $\sin\psi \approx \psi$ is valid for the heading angles encountered during controlled lane changes (typically $|\psi| < 2^\circ$).
+where the small-angle approximation $\sin\psi \approx \psi$ holds for the heading angles
+encountered during controlled lane changes.
 
-Substituting the tire forces, slip angles, and the kinematic coupling into the state equations, the continuous-time state-space representation becomes:
+\subsection{Global-Frame Bicycle Model}
+
+Under the small-angle assumption, the axle tire forces are expressed in terms of
+per-wheel cornering stiffness $C_{af}$ (front) and $C_{ar}$ (rear):
+\begin{align}
+F_{yf} &= -2 C_{af} \alpha_f \label{eq:front_tire} \\
+F_{yr} &= -2 C_{ar} \alpha_r \label{eq:rear_tire}
+\end{align}
+where the factor of two converts per-wheel stiffness to the full axle, and the slip angles are
+\begin{align}
+\alpha_f &= \frac{\dot{y}_{\text{b}} + l_f \dot{\psi}}{v_x} - \delta \label{eq:front_slip} \\
+\alpha_r &= \frac{\dot{y}_{\text{b}} - l_r \dot{\psi}}{v_x} \label{eq:rear_slip}
+\end{align}
+where $\delta$ is the front wheel steering angle. Substituting into the equations of motion
+yields the continuous-time state-space representation
 \begin{equation}
-\dot{\mathbf{x}} = A_c \mathbf{x} + B_c \delta
+\dot{\mathbf{x}} = A_c(v_x)\, \mathbf{x} + B_c\, \delta
 \label{eq:lat_ss_continuous}
 \end{equation}
-where the state matrix is:
+where the velocity-dependent state matrix is
 \begin{equation}
 A_c = \begin{bmatrix}
-0 & 1 & v_x & 0 \\[6pt]
-0 & -\dfrac{2(C_f + C_r)}{m v_x} & 0 & -v_x - \dfrac{2(l_f C_f - l_r C_r)}{m v_x} \\[6pt]
+0 & 1 & 0 & 0 \\[6pt]
+0 & -\dfrac{2(C_{af}+C_{ar})}{m v_x} & 0 &
+    \dfrac{2(l_r C_{ar} - l_f C_{af})}{m v_x} - v_x \\[6pt]
 0 & 0 & 0 & 1 \\[6pt]
-0 & -\dfrac{2(l_f C_f - l_r C_r)}{I_z v_x} & 0 & -\dfrac{2(l_f^2 C_f + l_r^2 C_r)}{I_z v_x}
+0 & \dfrac{2(l_r C_{ar} - l_f C_{af})}{I_z v_x} & 0 &
+   -\dfrac{2(l_f^2 C_{af} + l_r^2 C_{ar})}{I_z v_x}
 \end{bmatrix}
 \label{eq:Ac_lat}
 \end{equation}
-
-The input matrix is:
+and the input matrix is
 \begin{equation}
-B_c = \begin{bmatrix} 0 \\[4pt] \dfrac{2 C_f}{m} \\[4pt] 0 \\[4pt] \dfrac{2 l_f C_f}{I_z} \end{bmatrix}
+B_c = \begin{bmatrix} 0 \\[4pt] \dfrac{2 C_{af}}{m} \\[4pt] 0 \\[4pt]
+\dfrac{2 l_f C_{af}}{I_z} \end{bmatrix}
 \label{eq:Bc_lat}
 \end{equation}
-
-\paragraph{Comparison with the body-frame formulation.}
-In the classical body-frame bicycle model \cite{rajamani_vehicle_2005}, the first state equation is $\dot{y}_{\text{body}} = \dot{y}_{\text{body}}$ (an identity), and the $A_c(1,3) = 0$ element reflects that heading does not directly enter the body-frame lateral velocity equation. In the global-frame formulation used here, $A_c(1,3) = v_x$ captures the kinematic coupling between heading and global lateral position. This means a small heading error $\psi$ produces a lateral drift rate of $v_x \psi$, which is precisely the physical behavior that must be tracked during lane changes. The $A_c(2,3) = 0$ entry (compared to $(C_f+C_r)/m$ in the body-frame version) results from the coordinate transformation and the use of per-tire cornering stiffness with the explicit factor of two.
-
-The state matrix $A_c$ depends on the longitudinal velocity $v_x$. This means that the lateral model is a linear parameter-varying (LPV) system. For the MPC implementation, we update the matrices at each control step using the current velocity.
+Because $A_c$ depends on $v_x$, the model is a linear parameter-varying (LPV) system.
+The matrices are recomputed, and the OSQP prediction matrices rebuilt, whenever the
+longitudinal speed drifts more than $2\;\mathrm{m/s}$ from the last linearisation point.
 
 \subsection{Discrete-Time Representation}
 
-The continuous-time lateral model is converted to discrete time using ZOH discretization. Unlike the double integrator, the bicycle model does not have simple analytical expressions for the discrete matrices. Instead, we compute them numerically using the matrix exponential method.
-
-The discrete state matrix is:
-\begin{equation}
-A_d = e^{A_c \Delta t}
-\label{eq:Ad_lat}
-\end{equation}
-
-The discrete input matrix is computed using the augmented matrix method:
-\begin{equation}
-\begin{bmatrix} A_d & B_d \\ 0 & I \end{bmatrix} = \exp\left( \begin{bmatrix} A_c & B_c \\ 0 & 0 \end{bmatrix} \Delta t \right)
-\label{eq:augmented}
-\end{equation}
-
-This method is implemented using the \texttt{scipy.linalg.expm} function in Python, which computes the matrix exponential using a Padé approximation with scaling and squaring.
+The continuous-time matrices are converted to discrete time by zero-order hold (ZOH)
+discretisation at the Nash control period $\Delta t_{\mathrm{lat}} = 0.05\;\mathrm{s}$
+(20~Hz), with the matrix exponential evaluated numerically. Between Nash updates, the
+most recent steering command is held constant.
 
 \subsection{Vehicle Parameters}
 
-The bicycle model parameters are based on an Audi TT Coupé 2.0 TFSI (230~PS), chosen as a representative compact sports sedan \cite{rajamani_vehicle_2005, fernandez_vehicle_nodate}. Table~\ref{tab:vehicle_params_ch2} summarizes the parameters used in the simulation.
+The bicycle model parameters are based on an Audi~TT Coup\'e 2.0~TFSI (230~PS)
+\cite{rajamaniVehicleDynamicsControl2005}. The parameters are listed in
+Table~\ref{tab:vehicle_params_ch2}.
 
 \begin{table}[ht]
 \centering
@@ -752,89 +845,39 @@ The bicycle model parameters are based on an Audi TT Coupé 2.0 TFSI (230~PS), c
 \hline
 \textbf{Parameter} & \textbf{Symbol} & \textbf{Value} \\
 \hline
-Vehicle mass (kerb) & $m$ & 1305 kg \\
-Yaw moment of inertia & $I_z$ & 2500 kg$\cdot$m² \\
-Wheelbase & $L$ & 2.505 m \\
-CG to front axle & $l_f$ & 1.2525 m \\
-CG to rear axle & $l_r$ & 1.2525 m \\
-Front cornering stiffness (per tire) & $C_f$ & 55,000 N/rad \\
-Rear cornering stiffness (per tire) & $C_r$ & 55,000 N/rad \\
-Overall length & --- & 4.177 m \\
-Overall width & --- & 1.832 m \\
-Maximum steering angle & $\delta_{\max}$ & $25^\circ$ (0.436 rad) \\
-Maximum steering rate & $\dot{\delta}_{\max}$ & $15^\circ$/ss (0.262 rad/s) \\
-Nominal velocity & $v_x$ & 20 m/s (72 km/h) \\
+Vehicle mass (kerb)                   & $m$             & 1305 kg \\
+Yaw moment of inertia                 & $I_z$           & 2500 kg$\cdot$m$^2$ \\
+Wheelbase                             & $L$             & 2.505 m \\
+CG to front axle                      & $l_f$           & 1.2525 m \\
+CG to rear axle                       & $l_r$           & 1.2525 m \\
+Front cornering stiffness (per wheel) & $C_{af}$        & 36\,500 N/rad \\
+Rear cornering stiffness (per wheel)  & $C_{ar}$        & 22\,300 N/rad \\
+Overall length                        & ---             & 4.177 m \\
+Overall width                         & ---             & 1.832 m \\
+Maximum steering angle                & $\delta_{\max}$ & $25^\circ$ (0.436 rad) \\
 \hline
 \end{tabular}
-\caption{Vehicle parameters based on the Audi TT Coupé 2.0 TFSI}
+\caption{Vehicle parameters based on the Audi TT Coup\'e 2.0 TFSI \cite{AudiTTCoupeTechnicalData}}
 \label{tab:vehicle_params_ch2}
 \end{table}
 
-The symmetric CG position ($l_f = l_r = L/2$) produces neutral steer characteristics, which simplifies the dynamics (several $l_f C_f - l_r C_r$ terms vanish when $l_f = l_r$ and $C_f = C_r$). The cornering stiffness values of 55,000~N/rad per tire were selected through simulation-based tuning to produce realistic lateral response at the nominal velocity of 20~m/s. These values yield a total axle stiffness of 110,000~N/rad (with the factor of two in the equations of motion), which is consistent with standard passenger vehicles in the 1300~kg class~\cite{rajamani_vehicle_2005}.
+The asymmetric cornering stiffness values reflect the front-wheel-drive weight distribution
+of the Audi TT (62/38 front-to-rear split). Per-wheel stiffness is estimated from the
+Pacejka rule $C_\alpha \approx 9.2 F_z$, where $F_z$ is the nominal wheel normal load:
+$F_{z,f} \approx 3\,963\;\mathrm{N}$ yields $C_{af} \approx 36\,500\;\mathrm{N/rad}$
+and $F_{z,r} \approx 2\,428\;\mathrm{N}$ yields $C_{ar} \approx 22\,300\;\mathrm{N/rad}$,
+consistent with the compact FWD range reported in Rajamani~\cite{rajamaniVehicleDynamicsControl2005},
+Chapter~2.
 
 \subsection{Sampling Rate Selection}
 
-The vehicle dynamics simulation runs at 100~Hz ($\Delta t_{\text{sim}} = 0.01$~s), which provides high-fidelity integration of the bicycle model. The lateral Nash MPC controller operates at a lower rate of 20~Hz ($\Delta t_{\text{Nash}} = 0.05$~s), meaning the optimization is solved every fifth simulation step. Between Nash updates, the most recent steering command is held constant (zero-order hold).
-
-The 20~Hz Nash rate was chosen as a compromise between computational cost and control bandwidth. At the nominal velocity of 20~m/s, the bicycle model's dominant yaw time constant is approximately 0.15--0.3~s, and the 20~Hz rate provides 3--6 control updates per time constant, which is sufficient for accurate trajectory tracking.
-
-\subsection{Dual-Model Architecture}
-\label{sec:dual_model}
-
-The lateral control implementation employs a dual-model architecture in which two versions of the bicycle model run in parallel at each simulation time step. The first model, referred to as the \textbf{plant model}, uses the standard body-frame formulation. The second model, referred to as the \textbf{error model}, uses a modified formulation better suited for MPC prediction.
-
-The plant model uses the standard body-frame state matrix, where the first-row coupling element is zero ($A_c^{\text{body}}(1,3) = 0$), and the lateral velocity equation follows the classical derivation of Rajamani~\cite{rajamani_vehicle_2005}:
-\begin{equation}
-A_c^{\text{body}} = \begin{bmatrix}
-0 & 1 & 0 & 0 \\[6pt]
-0 & -\dfrac{2(C_f + C_r)}{m v_x} & 0 & -v_x - \dfrac{2(l_f C_f - l_r C_r)}{m v_x} \\[6pt]
-0 & 0 & 0 & 1 \\[6pt]
-0 & -\dfrac{2(l_f C_f - l_r C_r)}{I_z v_x} & 0 & -\dfrac{2(l_f^2 C_f + l_r^2 C_r)}{I_z v_x}
-\end{bmatrix}
-\label{eq:Ac_body}
-\end{equation}
-
-The error model modifies the second and fourth rows to express the dynamics in terms of force coupling rather than kinematic coupling. For a straight reference road, the error model state matrix is:
-\begin{equation}
-A_c^{\text{error}} = \begin{bmatrix}
-0 & 1 & 0 & 0 \\[6pt]
-0 & -\dfrac{2(C_f + C_r)}{m v_x} & \dfrac{2(C_f + C_r)}{m} & -\dfrac{2(l_f C_f - l_r C_r)}{m v_x} \\[6pt]
-0 & 0 & 0 & 1 \\[6pt]
-0 & -\dfrac{2(l_f C_f - l_r C_r)}{I_z v_x} & \dfrac{2(l_f C_f - l_r C_r)}{I_z} & -\dfrac{2(l_f^2 C_f + l_r^2 C_r)}{I_z v_x}
-\end{bmatrix}
-\label{eq:Ac_error}
-\end{equation}
-
-The key differences are: $A_c^{\text{error}}(2,3) = 2(C_f+C_r)/m$ (compared to $0$ in the body-frame model) and $A_c^{\text{error}}(4,3) = 2(l_f C_f - l_r C_r)/I_z$ (compared to $0$ in the body-frame model). The input matrix $B_c$ and the output matrix $C$ are identical for both models.
-
-The error-model formulation follows the approach of Rajamani~\cite{rajamani_vehicle_2005}, Section~2.5, where the lateral error dynamics are expressed relative to a reference path. For a straight reference road (zero curvature), the error model captures how tire forces restore the vehicle toward the reference trajectory. This formulation is better suited for the MPC controller because it expresses the restoring dynamics through explicit force-coupling terms in the state matrix, providing more consistent linearization across the prediction horizon. With the symmetric CG position ($l_f = l_r$, $C_f = C_r$), the term $l_f C_f - l_r C_r$ vanishes, and the error model simplifies so that $A_c^{\text{error}}(4,3) = 0$, while $A_c^{\text{error}}(2,3) = 2(C_f+C_r)/m$ remains the active coupling term.
-
-Both models share the same input matrix $B_c$ and are discretized at the simulation rate (100~Hz) using the ZOH method (Equation~\eqref{eq:augmented}). At each time step, both models receive the same rate-limited steering command $\delta[k]$. The plant model state is used for simulation output and safety field evaluation, while the error model state is provided to the Nash equilibrium solver for state feedback (via the \texttt{get\_state\_vector()} interface). This separation ensures that the controller operates on a representation optimized for prediction accuracy, while the simulation faithfully represents the true vehicle response.
-
-\section{Multi-Rate Control Architecture}
-
-The longitudinal and lateral controllers operate at different rates within a three-level timing hierarchy:
-
-\begin{table}[ht]
-\centering
-\begin{tabular}{|l|c|c|l|}
-\hline
-\textbf{Layer} & \textbf{Rate} & $\Delta t$ & \textbf{Function} \\
-\hline
-Vehicle dynamics & 100 Hz & 0.01 s & State integration (both axes) \\
-Lateral Nash MPC & 20 Hz & 0.05 s & Steering optimization \\
-Longitudinal Nash MPC & 10 Hz & 0.10 s & Acceleration optimization \\
-\hline
-\end{tabular}
-\caption{Multi-rate control architecture}
-\label{tab:multi_rate}
-\end{table}
-
-Both controllers run in parallel. The longitudinal controller updates every 100~ms to compute a new acceleration command. The lateral controller updates every 50~ms to compute a new steering command. Between control updates, the respective commands are held constant.
-
-The controllers share state information through the vehicle state vector, which is updated at the fastest rate (100~Hz). This ensures that both controllers have access to the most recent position, velocity, and heading information.
-
-The multi-rate architecture has several advantages. It allows each controller to operate at a rate appropriate for its dynamics. It reduces computational load by avoiding unnecessary high-rate longitudinal optimization. It aligns with the typical architecture of production vehicle control systems, in which different subsystems operate at different rates.
+The vehicle dynamics simulation runs at 100~Hz ($\Delta t_{\mathrm{sim}} = 0.01\;\mathrm{s}$),
+which provides accurate integration of the bicycle model equations. The lateral Nash solver
+operates at 20~Hz ($\Delta t_{\mathrm{lat}} = 0.05\;\mathrm{s}$), meaning the QP is solved
+every fifth simulation step. At the nominal velocity of 20~m/s, the dominant yaw time
+constant of the bicycle model is approximately $0.15$--$0.3\;\mathrm{s}$, and the 20~Hz
+rate provides three to six control updates per time constant, which is sufficient for
+accurate trajectory tracking.
 
 \section{Human Driver Models}
 
