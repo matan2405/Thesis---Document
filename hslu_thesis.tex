@@ -24,6 +24,7 @@
 \usepackage{nomencl}
 \usepackage{csquotes}
 \usepackage{microtype}
+\usepackage{parskip}
 %--------------------------------------------------------------
 % PAGE GEOMETRY
 %--------------------------------------------------------------
@@ -186,192 +187,354 @@ The simulation results demonstrate that the proposed approach enables safe and c
 
 \section{Background}
 
-Human-driven and autonomous vehicles will share public roads for decades before full autonomy arrives on scale. Vehicle platooning is a coordinated driving formation in which multiple vehicles travel in close succession under automated spacing control. It offers one of the clearest near-term benefits of this mixed-traffic environment: reduced aerodynamic drag for following vehicles and higher lane throughput per kilometer of road. The difficulty is in entering. A human-driven vehicle that wishes to join an operating platoon must reconcile its driver's intentions with the platoon's automated spacing logic. This thesis develops a game-theoretic shared-control framework, grounded in Nash equilibrium theory, for exactly that problem.
+Human-driven and autonomous vehicles will share public roads for decades before full autonomy arrives at scale. Vehicle platooning is a coordinated driving formation in which multiple vehicles travel in close succession under automated spacing control. It offers one of the clearest near-term benefits of this mixed-traffic environment: reduced aerodynamic drag for following vehicles and higher lane throughput per kilometer of road. The difficulty is entering the platoon. A human-driven vehicle that wishes to join an operating platoon must reconcile its driver's intentions with the platoon's automated spacing logic. This thesis develops a game-theoretic shared-control framework, grounded in Nash equilibrium theory, for exactly that problem.
 
 
 \subsection{Vehicle Platooning}
 
-Vehicle platooning is a driving formation in which multiple vehicles travel closely together at highway speeds, maintaining safe inter-vehicle distances through coordinated control and V2V communication \cite{treiberTrafficFlowDynamics2013}. Drafting reduces fuel consumption by 10--15\% for following vehicles, and smaller following distances allow more vehicles per kilometre of road. Coordinated braking reduces reaction times and lowers collision risk.
+Vehicle platooning is a driving formation in which multiple vehicles travel closely together at highway speeds, maintaining safe inter-vehicle distances through coordinated control and V2V communication \cite{treiberTrafficFlowDynamics2013}. Aerodynamic drag reduction from traveling in close formation (drafting) reduces fuel consumption by 10\% - 15\% for following vehicles, and smaller following distances allow more vehicles per kilometer of road. Coordinated braking reduces reaction times and collision risk.
 
-Cooperative Adaptive Cruise Control (CACC) is the enabling technology \cite{rajamani_vehicle_2005}. CACC systems exchange speed, acceleration, and braking intentions over Vehicle-to-Vehicle (V2V) links, allowing vehicles to respond faster than human reaction times permit. The desired inter-vehicle gap follows the Constant Time Gap (CTG) policy:
+
+Cooperative Adaptive Cruise Control (CACC) is the technology that enables coordinated platoon operation \cite{rajamaniVehicleDynamicsControl2005}. CACC systems exchange speed, acceleration, and braking intentions via Vehicle-to-Vehicle (V2V) links, allowing vehicles to respond faster than human reaction times permit. The desired inter-vehicle gap follows the Constant Time Gap (CTG) policy:
 \begin{equation}
 d_{\text{des}} = d_0 + h \cdot v
 \label{eq:ctg_spacing_v2}
 \end{equation}
-where $d_0 = 2$\,m is the standstill distance, $h = 1.5$\,s is the time headway, and $v$ is the current vehicle speed. The gap therefore grows linearly with speed, providing appropriate safety margins at all operating conditions.
+where $d_0 = 2$\,m is the standstill distance, $h = 1.5$\,s is the time headway, and $v$ is the current vehicle speed. The gap therefore increases linearly with speed, providing appropriate safety margins under all operating conditions.
 
-Most CACC systems assume all platoon members are fully autonomous. This assumption breaks down in mixed traffic, where a human-driven vehicle must negotiate entry into an operating platoon. Safe merging requires explicit handling of both the human driver's intent and the platoon's automated spacing logic, a problem that neither conventional CACC nor standard autonomous control addresses directly.
+Most CACC systems assume that all platoon members are fully autonomous. This assumption fails in mixed traffic, where a human-driven vehicle must negotiate entry into an operating platoon. Safe merging requires explicit handling of both the human driver's intent and the platoon's automated spacing logic, a problem neither conventional CACC nor standard autonomous control addresses directly.
 
 
 \subsection{Shared Control Systems}
 
-When a human driver and an autonomous system must work together, we employ a shared-control approach. In shared control, the responsibility for driving is divided between the human and the automation system. The division of authority differs from full autonomy, in which the system has complete control, and from manual driving, in which the human has complete control.
+Shared control divides driving authority between a human operator and an automation system \cite{liSharedControlNovel2019}. Unlike full autonomy or purely manual operation, shared control maintains driver engagement, provides safety assistance proportional to risk, and enables smooth transitions of authority. The core engineering challenge is computing an authority split that is safe when risk is high and minimally intrusive when risk is low.
 
-Shared control has several important advantages. It keeps the human operator engaged in the driving task, thereby maintaining situational awareness. It provides safety assistance when the situation becomes dangerous. It allows gradual transitions between human and automated control. Finally, it respects driver autonomy while ensuring safety boundaries are maintained.
+Li et al.\ \cite{liSharedControlNovel2019} proposed mapping the instantaneous driving risk, quantified by a safety field potential, to an authority allocation ratio. This thesis adopts and extends that mapping to the platoon-merging problem, covering both longitudinal gap control and lateral lane-change execution.
 
-The key challenge in shared control is determining the appropriate degree of authority to assign to each party. When the situation is safe, the human should have more control to maintain engagement and respect their driving preferences. When the situation becomes dangerous, the autonomous system should assume greater control to ensure safety.
-
-Li et al. \cite{li_shared_2019} proposed a method to dynamically adjust this authority based on the current level of driving risk. Their approach uses a safety field to quantify risk and maps this risk to an authority allocation ratio. This thesis builds upon their framework and extends it to the platoon merging problem.
 
 \subsection{Game Theory for Vehicle Control}
 
-Game theory is a mathematical framework for analyzing situations where multiple decision-makers interact. In the context of vehicle control, we model the human driver and the autonomous system as two players in a game. Each player has their own objectives and makes decisions to achieve those objectives.
+Game theory provides a principled framework for systems with multiple decision-makers whose objectives are coupled but not identical \cite{basarDynamicNoncooperativeGame1999}. In the shared-control context, the human driver and the autonomous system are modeled as two players in a noncooperative differential game. Each player selects a control sequence that minimizes their own cost, given the other player's action. The Nash equilibrium is the joint strategy from which neither player benefits from deviating unilaterally.
 
-The Nash equilibrium is a central concept in game theory. In a Nash equilibrium, no player can improve their outcome by changing only their own decision. Both players are doing the best they can, given the other player's actions. This approach makes the Nash equilibrium a stable solution for the shared control problem.
-
-For two players with quadratic cost functions, the Nash equilibrium can be found by solving a system of coupled optimization problems using Distributed Model Predictive Control (DMPC). Player 1 (autonomous system) minimizes:
+For two players with quadratic cost functions over a finite horizon, the Nash equilibrium is computed via Distributed Model Predictive Control (DMPC). Player 1 (the autonomous system) minimizes:
 \begin{equation}
-J_1 = \sum_{k=0}^{N_p-1} \|\mathbf{z}[k] - \mathbf{r}_1[k]\|_{Q_1}^2 + \|u_1[k]\|_{R_1}^2 + \|u_2[k]\|_{S_1}^2
+J_1 = \sum_{k=0}^{N_p-1} \bigl\|\mathbf{z}[k] - \mathbf{r}_1[k]\bigr\|_{Q_1}^2 + \bigl\|u_1[k]\bigr\|_{R_1}^2
 \label{eq:cost_j1_intro}
 \end{equation}
-
-Player 2 (human driver) minimizes:
+Player 2 (the human driver) minimizes:
 \begin{equation}
-J_2 = \sum_{k=0}^{N_p-1} \|\mathbf{z}[k] - \mathbf{r}_2[k]\|_{Q_2}^2 + \|u_2[k]\|_{R_2}^2 + \|u_1[k]\|_{S_2}^2
+J_2 = \sum_{k=0}^{N_p-1} \bigl\|\mathbf{z}[k] - \mathbf{r}_2[k]\bigr\|_{Q_2(\lambda)}^2 + \bigl\|u_2[k]\bigr\|_{R_2}^2
 \label{eq:cost_j2_intro}
 \end{equation}
-
-where $\mathbf{z}$ is the system output, $\mathbf{r}_i$ is each player's reference trajectory, $Q_i$ weights tracking errors, $R_i$ weights own control effort, and $S_i$ weights the other player's control effort. This formulation follows Li et al. \cite{li_shared_2019}.
-
-An important insight from this research, which forms one of the key contributions of this thesis, is the role of the cross-coupling weights $S_1$ and $S_2$. We discovered that setting $S_i = R_i$ (cross-coupling weight equal to own control effort weight) transforms the competitive Nash game into a cooperative equilibrium. This principle, which we call the \textbf{$S = R$ Cooperation Principle}, ensures that the two controllers work together rather than against each other and is essential for achieving stable, comfortable control.
+where $\mathbf{z}$ is the system output, $\mathbf{r}_i$ is each player's reference trajectory,
+$Q_i$ weights output tracking errors, and $R_i$ weights each player's own control effort.
+The authority ratio $\lambda$ enters via $Q_2(\lambda) = \alpha(\lambda)\,Q_1$,
+where $\alpha = 1/(1+\lambda)$. As $\lambda$ increases, the human driver's tracking weight
+is attenuated relative to Player~1, and the iterative best-response loop converges to a
+solution in which $u_2^*$ approaches the system reference.
 
 \subsection{Lane Change Trajectory Planning}
 
-Joining a platoon requires not only longitudinal control (speed adjustment) but also lateral control (lane changing). The vehicle must change lanes to enter the platoon while avoiding collisions with the platoon vehicles.
+Platoon entry requires a lateral lane change coordinated with a longitudinal gap adjustment. The vehicle must move from its current lane into the platoon lane while avoiding collisions with platoon members.
 
-Several approaches exist for lane change trajectory planning. Song et al. \cite{song_vehicle_2013} developed a path-planning method based on elastic band theory, in which the planned path behaves like a stretched rubber band pulled toward the target while being repelled by obstacles. While this iterative approach can handle complex obstacle configurations, it requires multiple iterations to converge and may be computationally expensive for real-time applications.
-
-An alternative approach, which we adopt in this thesis, uses \textbf{polynomial trajectory planning}. Quintic (5th-order) polynomials yield smooth trajectories with continuous acceleration profiles, which are essential for passenger comfort. Gu and Dolan \cite{gu_toward_2014} demonstrated that polynomial-based trajectories can closely match human driving patterns in urban environments.
-
-For smooth and comfortable lane changes, we use a quintic polynomial trajectory. The normalized progress along the trajectory is:
+A quintic (fifth-order) polynomial trajectory is used to generate smooth, real-time lane-change references \cite{guHumanlikeMotionPlanning2014}. The trajectory has zero velocity and acceleration at both endpoints and a continuous jerk profile. The normalized lateral progress is:
 \begin{equation}
 s(\tau) = 10\tau^3 - 15\tau^4 + 6\tau^5
 \label{eq:quintic_polynomial}
 \end{equation}
-where $\tau = t/T_{lc}$ is the normalized time and $T_{lc}$ is the lane change duration.
+where $\tau = t / T_{lc}$ is the normalized time and $T_{lc}$ is the lane-change duration. The polynomial yields a closed-form solution that requires no iterations, making it suitable for real-time execution at 20\, Hz.
 
-This polynomial has important properties that make it suitable for vehicle control. It has zero velocity and acceleration at both endpoints, ensuring a smooth start and end. It has a continuous jerk profile, which is comfortable for passengers. It provides an analytical solution requiring no iterations, making it suitable for real-time control. The maximum lateral velocity occurs at $\tau = 0.5$, making constraint satisfaction predictable.
-
-A key contribution of this thesis is the dynamic computation of the lane change duration $T_{lc}$ to satisfy the heading angle constraint $\psi < \psi_{\max}$. Since heading angle is approximately $\psi \approx \dot{y}/v_x$ for small angles, we can derive the minimum lane change duration:
+The lane-change duration $T_{lc}$ is computed dynamically from the heading angle constraint
+$|\psi| \leq \psi_{\max}$. Since $\psi \approx \dot{y}/v_x$ for small angles, the minimum
+permissible duration for the autonomous system's trajectory is:
 \begin{equation}
-T_{lc,\min} = \frac{1.875 \cdot |\Delta y|}{v_x \cdot \tan(\psi_{\max})}
+T_{lc,\text{sys}} = \frac{1.875 \cdot |\Delta y|}{v_x \cdot \tan(\psi_{\max})}
 \label{eq:T_lc_min}
 \end{equation}
-where $\Delta y$ is the lane change distance, $v_x$ is the longitudinal velocity, and the factor 1.875 comes from the maximum of the quintic polynomial's derivative. This constraint ensures the heading angle stays within comfortable limits throughout the maneuver.
-
-Empirical studies provide guidance for selecting appropriate lane change durations. Toledo and Zohar~\cite{toledoModelingDurationLane2007} analyzed naturalistic driving data and found that lane change durations for passenger cars average 5--6~seconds, with significant variation depending on traffic conditions and driver aggressiveness. Lee et al.~\cite{leeComprehensiveExaminationNaturalistic2004a} conducted the largest known naturalistic lane change study (8,667 observed lane changes) and reported durations ranging from approximately 3~seconds for urgent maneuvers to over 8~seconds for cautious ones. These empirical findings inform the lane change duration parameters used in this thesis: human driver durations range from 3.0~s (aggressive) to 6.0~s (cautious), consistent with the naturalistic data, while the autonomous system uses a 1.5$\times$ multiplier yielding durations of 4.5~s to 9.0~s to ensure additional smoothness.
+where $\Delta y = |y_{\text{platoon}} - y_{\text{ego}}(t_0)|$ is the lateral offset at the
+moment the maneuver is initiated, $v_x$ is the longitudinal speed, and the factor 1.875
+is derived from the maximum of the derivative of the quintic polynomial. A relaxed duration is assigned
+to the human driver's trajectory:
+\begin{equation}
+T_{lc,\text{hum}} = \frac{1.5 \cdot |\Delta y|}{v_x \cdot \tan(\psi_{\max})}
+\label{eq:T_lc_hum}
+\end{equation}
+The factor 1.5 accommodates the less constrained heading excursion typical of human
+lane changes \cite{toledoModelingDurationLane2007, leeComprehensiveExaminationNaturalistic2004a}.
+Both durations are subject to a minimum floor $T_{\min}$, computed as the time required to
+bring the current lateral velocity, heading angle, and yaw rate to zero, with an absolute
+lower bound of $4.0$\,s. By design, the system trajectory is longer than the human trajectory.
+With $\psi_{\max} = 4^\circ$, $\Delta y = 3.5$\,m (full lane change from lane
+center), and $v_x = 20$\,m/s, the constraints yield $T_{lc,\text{sys}} = 4.7$\,s and
+$T_{lc,\text{hum}} = 3.75$\,s.
 
 \subsection{Safety Field Theory}
 
-To determine when the autonomous system should intervene, we need a way to measure the current level of risk. Safety field theory, developed by Wang et al. \cite{wang_driving_2015, wang_driving_2016}, provides such a measure.
+The autonomous system requires a continuous quantitative measure of collision risk to
+decide when intervention is warranted. Safety field theory, introduced by Wang \emph{et al.}
+\cite{wangDrivingSafetyField2015, wangDrivingSafetyField2016} and extended to an elliptic form by
+Li \emph{et al.} \cite{liSharedControlNovel2019}, provides such a measure by mapping each obstacle onto a scalar potential whose gradient defines a force on the ego vehicle.
 
-Potential-field methods inform robotics safety. The basic idea is to assign a risk value to every point around the vehicle. Areas near obstacles have high risk values, while open areas have low risk values. The total risk experienced by the vehicle depends on its position relative to surrounding obstacles.
-
-The driving safety field consists of three components:
+The classical decomposition is retained:
 \begin{equation}
-\mathbf{E}_s = \mathbf{E}_p + \mathbf{E}_k + \mathbf{E}_b
+\mathbf{E}_s = \mathbf{E}_p + \mathbf{E}_v + \mathbf{E}_D
 \label{eq:safety_field_intro}
 \end{equation}
-where $\mathbf{E}_p$ is the potential field from static obstacles, $\mathbf{E}_k$ is the kinetic field from moving vehicles, and $\mathbf{E}_b$ is the behavior field representing driver characteristics.
+where $\mathbf{E}_p$ is the potential field from static obstacles and road
+boundaries, $\mathbf{E}_v$ is the kinetic field from moving obstacles, and $\mathbf{E}_D$
+is the behavior field reflecting the driver risk factor. All three components are
+constructed in the elliptic form of Li \emph{et al.}, in which the isotropic distance of
+the original Wang formulation is replaced by an elliptic radius whose tangential axis
+stretches with the closing speed. This encodes the empirical observation that a driver
+requires a larger longitudinal clearance than lateral clearance to complete an avoidance
+maneuver.
 
-This approach has several useful properties. The risk measure is continuous, enabling smooth control responses. The method naturally handles multiple obstacles by combining their individual contributions. The resulting risk values can be used directly in the authority allocation mechanism. The field can be extended to consider both longitudinal and lateral risks.
+Two safety fields are constructed in parallel. The \emph{lateral safety field} governs the
+lane-change task and evaluates the full field force $\mathbf{F}^{\text{lat}}$ following
+Li~\emph{et al.} Eq.~21, with an additional pair of $1/\mathrm{dist}$ repulsion terms at
+the lane edges to keep the ego vehicle inside the roadway. The \emph{longitudinal safety
+field} governs the gap-regulation task and reduces the same decomposition to the potential
+component alone, expressed in the gap-error coordinate with distance and velocity weights
+that subsume the kinetic and behavior contributions. Both fields use a signed convention
+in which positive values are repulsive and negative values are attractive, and both are
+smoothed by an exponential moving average filter that adapts the parameters continuously
+to the current traffic state.
 
-For the platoon merging problem, we extend the safety field concept in two important ways. First, we consider bidirectional risks: the merging vehicle faces risk from both the vehicle ahead (the leader) and the vehicle behind (the follower). Second, we introduce a \textbf{phase detection system} that distinguishes between active merging (requiring aggressive safety intervention) and steady-state following (where comfort should be prioritized). This phase detection prevents oscillations that can occur when a vehicle has reached its target position, but the safety field continues to generate unnecessary corrective forces.
+Two extensions are made to the classical single-obstacle formulation for the platoon-merging
+problem. First, the longitudinal risk assessment is bidirectional: the total force combines
+a leader term with a weighted follower term \cite{wangDrivingSafetyField2015}, so that both the
+vehicle ahead and the vehicle behind contribute to the authority signal. The follower weight
+is set to $0.5$, reflecting the asymmetric information flow characteristic of
+predecessor-following topologies in cooperative adaptive cruise control. Second, a phase
+machine with four discrete states (APPROACH, GAP SEARCH, MERGE, and FOLLOWING) gates
+the safety response so that aggressive gap closing during MERGE gives way to a comfort-oriented
+soft transition during FOLLOWING. The follower term is never faded, since rear-end safety
+must remain unconditional at all phases.
 
 \section{Problem Statement}
 
-This thesis addresses the problem of merging a human-driven vehicle into an autonomous platoon. The merging vehicle travels in a lane adjacent to the platoon and must safely enter the platoon at an appropriate position.
+This thesis addresses the safe merging of a human-driven vehicle into an autonomous
+platoon. The merging vehicle travels in an adjacent lane and must enter the platoon at
+a designated gap without colliding with the leader or the follower. The problem is
+decomposed into two subproblems, each solved within the same Nash/DMPC framework.
 
-We decompose this problem into two subproblems, which are solved within a consistent game-theoretic framework. The first is \textbf{longitudinal control}, which regulates the vehicle's forward motion to reach and maintain the correct position within the platoon. The second is \textbf{lateral control}, which regulates lateral motion during lane changes to ensure safe entry into the platoon's lane. Both sub-problems are solved using Nash equilibrium theory with Distributed Model Predictive Control (DMPC), creating a unified control architecture.
 
 \subsection{Longitudinal Control Problem}
 
-The longitudinal control problem concerns the vehicle's forward motion. The goal is to adjust the vehicle's speed so that it reaches the correct position for merging and then maintains an appropriate following distance.
+Longitudinal control regulates the vehicle's forward motion to close the target gap,
+reach the correct inter-vehicle distance, and maintain it in steady state. The controller
+tracks a constant-time-gap reference with standstill distance $d_0 = 2$~m and time
+headway $h = 1.5$~s, respects the follower constraint arising from the vehicle behind,
+limits jerk to preserve passenger comfort, and stays within the physical acceleration
+envelope of the vehicle. Execution is required at $10$~Hz to close the outer control
+loop of the platoon in real time.
 
-The specific objectives are: reaching the target position within the platoon while respecting the gap between vehicles, maintaining a safe following distance from the vehicle ahead (the leader), avoiding being hit by the vehicle behind (the follower), providing a comfortable ride by minimizing harsh acceleration, braking, and jerk, respecting the physical limits of the vehicle (maximum acceleration, maximum deceleration), and achieving real-time performance suitable for practical implementation.
-
-This problem is challenging for several reasons. The merging vehicle must consider risks from both the front and the rear simultaneously. The vehicle must close potentially large gaps while maintaining safety. Different merging scenarios (joining at the front, middle, or rear of the platoon) require different control strategies. The transition from gap-closing to steady-state following must be smooth and stable.
+The merging scenario places a large initial gap error under a moving follower, so the
+controller must close the gap without triggering an emergency response in the trailing
+vehicle. Entry before, within, or after the platoon each presents a different risk
+profile and a different sign of the follower force.
 
 \subsection{Lateral Control Problem}
 
-The lateral control problem concerns the vehicle's lateral motion during lane changes. The goal is to guide the vehicle from its current lane into the platoon's lane.
+Lateral control guides the vehicle from its own lane into the platoon lane along a
+smooth quintic reference. Contact with platoon members is forbidden throughout the
+maneuver; lateral acceleration and heading angle are kept within comfort bounds, and
+the lane-change timing is coordinated with the longitudinal controller. Execution is
+required at $20$~Hz.
 
-The specific objectives are: following a smooth path to the target lane, avoiding collisions with platoon vehicles during the lane change, maintaining vehicle stability by limiting lateral acceleration and heading angle, coordinating the lane change timing with the longitudinal control, and providing comfortable steering that respects driver preferences.
-
-This problem requires modeling the vehicle's lateral dynamics using a bicycle model, which is more complex than the double integrator used for longitudinal control. The vehicle's steering response depends on its speed and tire properties. Additionally, the human driver's behavior during lane changes varies significantly depending on their driving style (cautious, normal, or aggressive).
+Lateral dynamics is governed by the single-track bicycle model, whose response depends
+on vehicle speed and tire properties. Because the linearization is only accurate near
+the operating point, the lateral Nash solver rebuilds the state-space matrices whenever
+the longitudinal speed drifts by more than $2$~m/s from the last operating point.
 
 \subsection{Authority Allocation Problem}
 
-When a human driver is present, we must decide how to combine the human's input with the autonomous system's commands. This is the authority allocation problem.
-
-The shared control input is computed as:
+Authority allocation determines how the Nash-optimal system control $u_1^{*}$ and the
+Nash-optimal human control $u_2^{*}$ are combined into the command sent to the vehicle.
+The shared output is
 \begin{equation}
-u_{\text{shared}} = \alpha \cdot u_1 + (1 - \alpha) \cdot u_2
+u_{\text{shared}} = u_1^{*} + u_2^{*}
 \label{eq:shared_control_intro}
 \end{equation}
-where $\alpha \in [0, 1]$ is the system authority, $u_1$ is the autonomous system's control, and $u_2$ is the human driver's control.
+where $u_1^{*}$ is the optimal control of the autonomous system, and $u_2^{*}$ is the
+optimal control of the human driver at the current time step. The two controls are
+summed directly rather than blended by a convex combination, since the authority balance
+is encoded in the Nash cost function of the human player rather than in an outer weighting
+rule \cite{pustilnikGeneralizedNashEquilibrium2025}.
 
-The authority $\alpha$ is derived from the authority ratio $\lambda$:
+The authority balance is governed by an authority weight
 \begin{equation}
-\alpha = \frac{\lambda}{1 + \lambda}
+\alpha = \frac{1}{1 + \lambda}
 \label{eq:alpha_lambda}
 \end{equation}
-
-The system must estimate the human driver's intent from their driving style, assess the current risk level using the safety field, adjust the authority balance accordingly, make smooth transitions to avoid surprising the driver, and ensure the vehicle remains stable throughout all phases of operation. The authority allocation must function correctly across different driver types, from cautious drivers who prefer gentle maneuvers to aggressive drivers who prefer rapid lane changes.
+where $\alpha \in (0, 1]$ scales the control-effort weight of the human player, and
+$\lambda \geq 0$ is the authority ratio derived from the safety field force. The
+human's control-effort matrix is set to $R_2(\lambda) = R_2^{0} / \alpha$, so that a
+small $\alpha$ (equivalently, a large $\lambda$) penalizes deviations of $u_2^{*}$
+from zero and drives the human input toward the null control. Under nominal risk
+($\lambda = 0$) the weight reduces to $\alpha = 1$ and the human retains full
+authority. Under maximal risk ($\lambda \to \infty$) the weight decays to
+$\alpha \to 0$ and the system control $u_1^{*}$ becomes the dominant contribution to
+$u_{\text{shared}}$. The value of $\lambda$ is determined at each control step from
+the magnitude of the safety field force computed in the preceding subsection.
 
 \section{Research Objectives}
 
-This thesis has the following objectives.
+This thesis pursues the following objectives.
 
-The first objective is to \textbf{develop an efficient Nash equilibrium solver}. We develop a Disciplined Parameterized Programming (DPP) compliant Nash solver that achieves real-time performance. The solver employs a stacked Quadratic Programming (QP) formulation that precomputes constant matrices and updates only the linear terms at each time step. This approach achieves approximately 2 milliseconds solve time, compared to 50-80 milliseconds for traditional iterative methods—a 30-fold improvement.
+The first objective is to implement a real-time Nash equilibrium solver. Two
+independent solvers are constructed, one for longitudinal control and one for
+lateral control, each formulated as a separate two-player differential game with no
+coupling between them. Both solvers are based on an Iterative Best Response (IBR)
+algorithm with a per-player OSQP backend, and each pre-factorizes its cost matrices
+for a discrete set of authority-ratio levels (eleven levels for the longitudinal
+solver and seven for the lateral solver) so that the closest level can be selected
+without rebuilding the quadratic program. Warm-starting from the shifted horizon
+of the previous solution is applied at every control step. The target execution
+rates are $10$\, Hz for longitudinal control and $20$\, Hz for lateral control.
 
-The second objective is to \textbf{establish the $S = R$ Cooperation Principle}. We show that setting cross-coupling weights equal to control effort weights ($S_1 = R_1$, $S_2 = R_2$) in the Nash cost functions transforms competitive behavior into cooperative behavior. This principle is essential for achieving stable, non-oscillatory control in shared control systems.
+The second objective is to implement the $\alpha$-scaling authority mechanism of
+Pustilnik and Borrelli \cite{pustilnikGeneralizedNashEquilibrium2025}. The authority ratio $\lambda$ is mapped to a scalar weight $\alpha = 1/(1+\lambda)$ that multiplies the tracking cost
+of Player~2 in the Nash quadratic program, so that the safety-field-driven
+authority balance is encoded inside the Nash cost function rather than applied as
+an outer blending rule on the shared control.
 
-The third objective is to \textbf{develop phase-aware safety field models}. We extend safety field theory by incorporating a dynamic phase-detection system. The system distinguishes between the MERGING phase (active gap closing with aggressive safety response) and the FOLLOWING phase (steady-state operation with comfort-optimized response). Phase transitions use hysteresis to prevent oscillations, and soft transitions ensure smooth changes in control behavior.
+The third objective is to develop phase-aware safety field models. A four-state
+phase machine (APPROACH, GAP SEARCH, MERGE, and FOLLOWING) is introduced, with
+transition conditions derived from gap error, relative velocity, and lateral
+alignment. The safety response is aggressive during MERGE to close the gap, and
+attenuated during FOLLOWING to prioritize passenger comfort. A dwell-time
+requirement on entry into FOLLOWING prevents chattering at phase boundaries.
 
-The fourth objective is to \textbf{create a bidirectional longitudinal safety field}. We develop a safety field that accounts for risks from both the leading vehicle (ahead) and the following vehicle (behind). The field uses asymmetric weighting that reflects the information flow in CACC systems: forward-dominant coupling for string stability.
 
-The fifth objective is to \textbf{design an ellipse-based lateral safety field}. We introduce a safety field for lateral control that employs elliptical zones around each vehicle. The ellipses are elongated in the direction of motion, reflecting the fact that more space is needed in front of a moving vehicle than beside it.
+The fourth objective is to develop a bidirectional longitudinal safety field. The
+field quantifies risk from both the preceding vehicle and the following vehicle,
+with asymmetric weighting that reflects the forward-dominant information flow of
+predecessor-following topologies.
 
-The sixth objective is to \textbf{model human driver behavior with personality types}. We create human driver models that capture individual differences in driving behavior. For longitudinal control, we use the Intelligent Driver Model (IDM) \cite{treiber_congested_2000}, which provides realistic car-following behavior with parameters for desired velocity, time headway, and comfortable acceleration. For lateral control, we use the Stanley Controller \cite{thrun_stanley_2006, abdelmoniem_path-tracking_2020}, which combines lateral error correction with heading angle alignment. Both models include personality traits (cautious, normal, and aggressive) that affect control gains and reference trajectories.
+The fifth objective is to design an elliptic lateral safety field. A lateral field
+based on the Li \emph{et al.} \cite{liSharedControlNovel2019} elliptic \emph{driving safety
+field} is derived, with velocity-corrected kinetic terms, road-boundary repulsion,
+and a $\tanh$ sign function that avoids force discontinuities at lateral alignment.
 
-The seventh objective is to \textbf{implement unified longitudinal-lateral architecture}. We design both controllers with a consistent architecture, using the same Nash equilibrium framework with DMPC, the same phase-detection mechanism (MERGING to FOLLOWING), the same authority-allocation approach based on the safety field, and the same code structure for maintainability.
+The sixth objective is to develop an online driver-calibration mechanism. The human
+driver's time headway $T$ is estimated online: during gap-closing by inverting the
+Intelligent Driver Model (IDM), and during following by direct gap measurement.
+Estimates are smoothed over a twenty-sample circular buffer (approximately $2$\,s
+at the $10$\,Hz Nash rate) and clipped to the physiological range
+$T \in [0.5, 3.0]$\,s, with a population-mean fallback of $T = 1.5$\,s until the
+buffer is full.
 
-The eighth objective is to \textbf{validate through comprehensive simulation}. We test the complete system through extensive simulations that cover three merging scenarios (joining before, in the middle of, or after the platoon), three driver personality types (cautious, normal, and aggressive), and nine test cases in total, encompassing all combinations.
+The seventh objective is to implement a common architecture for the two independent
+controllers. The longitudinal and lateral solvers share the same Nash/IBR structure,
+the same phase-detection logic, and the same authority-allocation mechanism, and
+both are implemented in Unity with a C\# wrapper for the OSQP solver.
+
+The eighth objective is to validate the system through simulation. Three merging
+scenarios are tested (joining before, within, and after the platoon) with
+metrics covering safety (gap error, time-to-collision (TTC)), comfort (longitudinal
+jerk, lateral acceleration), and shared-control behavior (authority distribution
+over time).
 
 \section{Thesis Contributions}
 
 This thesis makes the following contributions.
 
-The first contribution is a \textbf{DPP-Compliant Nash Equilibrium Solver}. We develop an optimized Nash solver using Disciplined Parameterized Programming (DPP). The key innovation is to reformulate the Nash game as a single stacked QP in which the quadratic cost matrix $P$ is constant (computed once at initialization) and only the linear term $q$ updates at each time step. This enables CVXPY to cache the problem structure, achieving a solve time of approximately 2 ms (compared to 56 ms for iterative methods), combined longitudinal and lateral control in less than 4 ms total, and real-time capability at 10 Hz (longitudinal) and 20 Hz (lateral) update rates.
+The first contribution is an IBR Nash equilibrium solver with $\lambda$-cached OSQP
+instances. The Nash game is solved by iterative best response, with a separate OSQP
+quadratic program per player. Cost matrices are pre-factorized for eleven
+longitudinal $\lambda$ levels and seven lateral $\lambda$ levels, and the closest
+level is selected at each control step by minimizing $|\ln\hat{\lambda} - \ln\lambda_k|$. Horizon-shift warm-starting reduces the OSQP iteration count, meeting the real-time budgets of the $10$\, Hz and $20$\, Hz control loops. The longitudinal and lateral solvers are constructed independently, with no cross-coupling between their state or control variables.
 
-The second contribution is \textbf{the $S = R$ Cooperation Principle}. We discover that the relationship between cross-coupling weights ($S$) and control effort weights ($R$) fundamentally determines the nature of the Nash equilibrium. When $S < R$, controllers compete against each other, causing oscillations. When $S = R$, controllers cooperate, achieving smooth convergence. When $S > R$, controllers become overly deferential, losing effectiveness. Setting $S_1 = R_1$ and $S_2 = R_2$ ensures cooperative behavior and is essential for practical implementation.
+The second contribution is the direct-sum shared-control formulation with
+$\alpha$-scaled Nash costs. The shared control is computed as $u_{\text{shared}} = u_1^{*} + u_2^{*}$ without an outer convex combination, since the authority balance is absorbed into the Player~2 cost through the $\alpha$-scaling of Pustilnik and Borrelli \cite{pustilnikGeneralizedNashEquilibrium2025}, where $\alpha = 1/(1+\lambda)$ multiplies the tracking-weight term of Player~2. The resulting equilibrium is shown to converge to a cooperative solution across the full range $\lambda \in [0, \infty)$, without the oscillatory instabilities that arise when authority is applied as an outer weighted sum on independent single-player controllers.
 
-The third contribution is \textbf{Phase Detection with Hysteresis}. We develop a dynamic phase-detection system that transitions between operating modes based on the actual system state rather than fixed timers. Entry to the FOLLOWING phase requires a gap error less than 15\% of the desired gap, a relative velocity less than 5\% of the target velocity, and all conditions stable for 5 seconds. Exit from FOLLOWING requires a gap error greater than 25\% or a relative velocity greater than 10\% (hysteresis prevents oscillation). Soft transitions provide a gradual reduction in force as errors decrease, thereby preventing sudden control changes.
+The third contribution is a phase-detection mechanism with dwell-time locking. Entry
+into FOLLOWING requires the normalized gap error $|\Delta g| / d_{\text{des}}$ to
+fall below $0.10$, the velocity error $|v_{\text{ego}} - v_{\text{leader}}|$ to fall
+below $0.5$\,m/s, and the gap-error rate $|\dot{(\Delta g)}|$ to fall below
+$0.3$\,m/s, with all conditions sustained for $5$\,s. A quadratic soft-transition
+factor further attenuates the safety field force as the gap error decreases within
+the FOLLOWING-band threshold ($0.15\, d_{\text{des}}$), preventing abrupt changes in
+control demand at the phase boundary.
 
-The fourth contribution is a \textbf{Bidirectional Longitudinal Safety Field}. We extend the safety field concept to handle risks from both directions during platoon merging. This includes leader force (repulsive force preventing collision with vehicle ahead), follower force (weighted force maintaining safe distance from vehicle behind), asymmetric weighting (follower weight $w_f \in [0.2, 0.5]$ reflects forward-dominant CACC information flow), and dynamic adaptation (parameters adjust based on TTC, gap size, and platoon context).
+The fourth contribution is a bidirectional longitudinal safety field. The field
+combines an elliptic leader force \cite{liSharedControlNovel2019} with a time-to-collision
+(TTC) force floor, a piecewise hard-zone response at close range, and a
+follower-weighted rear force. The TTC floor is
+\begin{equation}
+F_{\text{TTC}} = \text{ttc}_{\text{frac}} \cdot F_{\max}, \qquad
+\text{ttc}_{\text{frac}} = 1 - \mathrm{clip}\!\left(\tfrac{\mathrm{TTC} - \mathrm{TTC}_{\text{crit}}}{\mathrm{TTC}_{\text{warn}} - \mathrm{TTC}_{\text{crit}}}, 0, 1\right)
+\label{eq:ttc_floor}
+\end{equation}
+where $F_{\max} = 800$\,N is the saturation force, $\mathrm{TTC}_{\text{warn}} = 8$\,s
+is the TTC at which the floor begins to rise, and $\mathrm{TTC}_{\text{crit}} = 1.5$\,s
+is the TTC at which the floor reaches saturation. The hard-zone response saturates
+the leader force below $7$\,m gap and linearly interpolates between $7$ and $8$\,m.
+The follower contribution is weighted by $w_f = 0.5$ at steady state.
 
-The fifth contribution is \textbf{Lateral Control with Stanley-Based Human Model}. We adapt the Nash framework to lateral control using a dual-model bicycle architecture: a body-frame plant model for true state propagation and an error-frame controller model for Nash solver feedback, both with state $[y, \dot{y}, \psi, \dot{\psi}]$ and zero-order hold discretization. We employ a modified Stanley controller (linear PD formulation) for human-driver modeling with personality-dependent gains. Different reference trajectories are employed: a 5th-order polynomial for the system and a 3rd-order polynomial for the human. The lane change duration is computed dynamically from the heading angle constraint, with the system duration set to 1.5 times the human duration. Typical values range from 4.5 to 9.0~s for the system and 3.0 to 6.0~s for the human, depending on driver personality type, consistent with empirical measurements of naturalistic lane changes~\cite{toledoModelingDurationLane2007, leeComprehensiveExaminationNaturalistic2004a}. Heading priority ($Q_\psi \gg Q_y$) ensures stability by controlling heading angle first.
+The fifth contribution is an elliptic lateral safety field. The field is derived
+from the Li \emph{et al.} \cite{liSharedControlNovel2019} elliptic \emph{driving safety
+field}, with a Wang \emph{et al.}\ \cite{wangDrivingSafetyField2015, wangDrivingSafetyField2016}
+speed-dependent virtual mass, velocity-corrected kinetic terms with
+$K_1 = K_2 = 0.005$, and a $\tanh$ smoothing function with $\sigma = 0.5$\,m for the
+lateral force direction. Road-boundary repulsion is added via a
+$1/\mathrm{dist}$ potential active within $3$\,m of the lane edge.
 
-The sixth contribution is a \textbf{Unified Control Architecture}. We design both longitudinal and lateral controllers with consistent structure using the same Nash/DMPC framework with DPP-compliant solvers, the same phase detection mechanism (MERGING to FOLLOWING), the same authority allocation based on safety field force, the same soft transition functions for smooth mode changes, and a multi-rate architecture (100~Hz dynamics simulation, 10~Hz longitudinal Nash, 20~Hz lateral Nash).
+The sixth contribution is an online IDM driver-calibration method. During
+gap-closing, the human's time headway is estimated by inverting the IDM formula
+given the observed gap, velocity, and acceleration. During steady-state following,
+it is estimated directly as $T = (d - s_0) / v_x$, where $d$ is the measured gap,
+$s_0$ is the standstill distance, and $v_x$ is the ego longitudinal velocity. A
+twenty-sample circular buffer smooths the estimate, which converges within
+approximately $2$\,s to a driver-specific value used to personalize both the human
+reference trajectory and the $R_2$ weight schedule.
 
-The seventh contribution is a \textbf{Comprehensive Simulation Framework}. We develop a comprehensive Python simulation framework comprising 11 modules totaling over 5,100 lines of code, real-time visualization with trajectory plots and Nash analysis, automated testing across all 9 scenario combinations, and quantitative metrics, including collision rate (0%), TTC, jerk, and authority distribution.
+The seventh contribution is a Unity-based simulation framework. The complete system
+is implemented in Unity with the Universal Render Pipeline and a C\#
+wrapper for the OSQP solver. The vehicle plant is a nonlinear six-degree-of-freedom
+model \cite{belousovDevelopmentVehicleSimulation} integrated by fourth-order Runge--Kutta at $100$\, Hz, with a Rajamani parabolic tire model calibrated to Audi TT Coup\'{e} parameters.
+Per-tick telemetry is logged to CSV files and analyzed by a Python post-processing
+pipeline.
 
 \section{Thesis Organization}
 
 The remainder of this thesis is organized as follows.
 
-\textbf{Chapter 2: Mathematical Modeling} presents the vehicle dynamics models used in this thesis. We develop the double-integrator model for longitudinal control and the 2-DOF bicycle model for lateral control. We explain the discretization methods and the multi-rate control architecture.
+\textbf{Chapter~2: Mathematical Modeling} presents the vehicle-dynamics models used
+throughout the thesis. A distinction is drawn between the plant used for simulation, 
+a nonlinear six-degree-of-freedom vehicle model integrated by fourth-order
+Runge--Kutta at $100$\, Hz  and the reduced models seen by the controllers: a
+double-integrator for the longitudinal Nash solver and a two-degree-of-freedom
+bicycle model for the lateral Nash solver. The discretization methods and the
+multi-rate control architecture are also described.
 
-\textbf{Chapter 3: Safety Field Formulations} describes the risk quantification approach. We present the bidirectional longitudinal safety field with phase detection, the ellipse-based lateral safety field, and the integration of safety fields with the Nash control framework.
+\textbf{Chapter~3: Safety Field Formulations} describes the risk-quantification
+approach. The bidirectional longitudinal safety field is presented together with
+the four-state phase machine that gates its response, followed by the elliptic
+lateral safety field, and finally by the interface through which both fields feed
+the authority-allocation mechanism of the Nash controllers.
 
-\textbf{Chapter 4: Game-Theoretic Framework} presents the Nash equilibrium formulation. We describe the design of the cost function, the $S = R$ cooperation principle, the implementation of a DPP-compliant solver, and the dynamic authority allocation mechanism.
+\textbf{Chapter~4: Game-Theoretic Framework} presents the Nash equilibrium
+formulation used by both controllers. The cost-function design, the
+$\alpha$-scaling authority mechanism of Pustilnik and Borrelli
+\cite{pustilnikGeneralizedNashEquilibrium2025}, the Iterative Best Response (IBR) solver with
+$\lambda$-cached OSQP instances, and the dynamic authority-allocation mechanism
+driven by the safety field force are described in turn.
 
-\textbf{Chapter 5: System Integration} discusses how the longitudinal and lateral controllers are combined into a unified system. We present the parallel control architecture, the controller coordination, and the complete simulation framework.
+\textbf{Chapter~5: System Integration} discusses how the two independent controllers
+are executed within a common architecture. The parallel control pipeline, the
+coordinator that arbitrates phase transitions and reference generation, the online
+driver-calibration module, and the Unity-based simulation framework are presented.
 
-\textbf{Chapter 6: Simulation Results} presents the performance evaluation. We present results for all nine test scenarios and analyze safety metrics (collision rate, TTC), comfort metrics (jerk, lateral acceleration), and cooperation metrics (authority distribution).
+\textbf{Chapter~6: Simulation Results} presents the performance evaluation. Results
+are reported for three merging scenarios: joining before, within, and after the
+platoon. Each scenario is analyzed against safety metrics (gap error, time-to-collision (TTC)),
+comfort metrics (longitudinal jerk, lateral acceleration), and shared-control
+behavior (authority distribution over time).
 
-\textbf{Chapter 7: Conclusions} summarizes the main findings, discusses limitations of the current work, and suggests directions for future research.
+\textbf{Chapter~7: Conclusions} summarizes the main findings, discusses the
+limitations of the current work, and identifies directions for future research.
 
 
 %--------------------------------------------------------------
@@ -620,7 +783,7 @@ The 20~Hz Nash rate was chosen as a compromise between computational cost and co
 
 The lateral control implementation employs a dual-model architecture in which two versions of the bicycle model run in parallel at each simulation time step. The first model, referred to as the \textbf{plant model}, uses the standard body-frame formulation. The second model, referred to as the \textbf{error model}, uses a modified formulation better suited for MPC prediction.
 
-The plant model uses the standard body-frame state matrix, where the first-row coupling element is zero ($A_c^{\text{body}}(1,3) = 0$) and the lateral velocity equation follows the classical derivation of Rajamani~\cite{rajamani_vehicle_2005}:
+The plant model uses the standard body-frame state matrix, where the first-row coupling element is zero ($A_c^{\text{body}}(1,3) = 0$), and the lateral velocity equation follows the classical derivation of Rajamani~\cite{rajamani_vehicle_2005}:
 \begin{equation}
 A_c^{\text{body}} = \begin{bmatrix}
 0 & 1 & 0 & 0 \\[6pt]
@@ -829,7 +992,7 @@ w_d = \exp\left(-\frac{|e_{\text{gap}}|}{\tau_d}\right)
 \label{eq:distance_decay}
 \end{equation}
 
-with decay factor $\tau_d = 15$ m, ensuring force diminishes smoothly with distance.
+with decay factor $\tau_d = 15$ m, ensuring the force diminishes smoothly with distance.
 
 \textbf{Velocity-dependent weight:}
 \begin{equation}
