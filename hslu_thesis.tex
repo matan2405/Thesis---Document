@@ -879,73 +879,105 @@ constant of the bicycle model is approximately $0.15$--$0.3\;\mathrm{s}$, and th
 rate provides three to six control updates per time constant, which is sufficient for
 accurate trajectory tracking.
 
-\section{Human Driver Models}
+\section{Multi-Rate Control Architecture}
 
-\subsection{Longitudinal: Intelligent Driver Model}
-
-To model the human driver's longitudinal behavior, we use the Intelligent Driver Model (IDM) developed by Treiber et al. \cite{treiber_congested_2000, treiberTrafficFlowDynamics2013}. The IDM is a car-following model that produces realistic acceleration behavior based on the current velocity, the gap to the leading vehicle, and the relative velocity.
-
-The IDM acceleration is given by:
-\begin{equation}
-a_{\text{IDM}} = a_{\max} \left[ 1 - \left( \frac{v}{v_0} \right)^\delta - \left( \frac{s^*(v, \Delta v)}{s} \right)^2 \right]
-\label{eq:idm}
-\end{equation}
-where $a_{\max}$ is the maximum acceleration, $v$ is the current velocity, $v_0$ is the desired velocity, $s$ is the current gap, $\delta$ is the acceleration exponent (typically 4), and $s^*$ is the desired gap given by:
-\begin{equation}
-s^*(v, \Delta v) = s_0 + v T + \frac{v \Delta v}{2 \sqrt{a_{\max} b}}
-\label{eq:idm_desired_gap}
-\end{equation}
-where $s_0$ is the minimum gap at standstill, $T$ is the desired time headway, $\Delta v$ is the velocity difference to the leading vehicle, and $b$ is the comfortable deceleration.
-
-The IDM parameters are adjusted based on driver personality type: cautious drivers exhibit larger time headways and lower maximum accelerations, whereas aggressive drivers exhibit smaller time headways and higher maximum accelerations.
-
-\subsection{Lateral: Modified Stanley Controller}
-\label{sec:stanley_controller}
-
-To model the human driver's lateral behavior during lane changes, we use a modified version of the Stanley controller \cite{thrun_stanley_2006, abdelmoniem_path-tracking_2020}. The classical Stanley controller combines heading error correction with a nonlinear cross-track error term. In our implementation, we adopt a \textbf{linear proportional-derivative (PD) formulation} that is better suited to integration with the Nash equilibrium framework, where linearity of the human model improves convergence:
-
-\begin{equation}
-\delta_{\text{human}} = -k_e \cdot e_y - k_\psi \cdot e_\psi
-\label{eq:stanley_modified}
-\end{equation}
-where $e_y = y - y_{\text{ref}}$ is the lateral position error, $e_\psi = \psi - \psi_{\text{ref}}$ is the heading angle error, $k_e$ is the cross-track gain, and $k_\psi$ is the heading gain.
-
-This formulation preserves the two-term structure of the Stanley controller (position correction plus heading correction) while replacing the nonlinear $\arctan(k_e \cdot e / v_x)$ term with a linear gain. The linear form is appropriate for lane-change control because the errors are small enough that the $\arctan$ function operates in its approximately linear region. The separate heading gain $k_\psi$ provides independent control of heading response, which is important for passenger comfort during lane changes.
-
-The steering output is saturated at the vehicle's physical steering limit ($\pm 25^\circ$) and low-pass filtered ($\alpha = 0.2$) to prevent abrupt corrections.
-
-\subsection{Driver Personality Types}
-
-We model three types of human drivers with different parameter settings, summarized in Table~\ref{tab:driver_personality}.
+The longitudinal and lateral Nash solvers operate at different rates within a three-level
+timing hierarchy, summarised in Table~\ref{tab:multi_rate}.
 
 \begin{table}[ht]
 \centering
-\begin{tabular}{|l|c|c|c|c|c|}
+\begin{tabular}{|l|c|c|l|}
 \hline
-\textbf{Driver Type} & \textbf{IDM $T$ [s]} & \textbf{IDM $b$ [m/s²]} & \textbf{Stanley $k_e$} & \textbf{Stanley $k_\psi$} \\
+\textbf{Layer} & \textbf{Rate} & $\Delta t$ & \textbf{Function} \\
 \hline
-Cautious   & 2.0 & 1.5 & 0.003 & 0.3 \\
-Normal     & 1.5 & 2.0 & 0.005 & 0.5 \\
-Aggressive & 1.0 & 2.5 & 0.008 & 0.7 \\
+Vehicle dynamics      & 100 Hz & 0.01 s & State integration (both axes) \\
+Lateral Nash solver   &  20 Hz & 0.05 s & Steering optimisation \\
+Longitudinal Nash solver & 10 Hz & 0.10 s & Acceleration optimisation \\
 \hline
 \end{tabular}
-\caption{Human driver personality parameters}
-\label{tab:driver_personality}
+\caption{Multi-rate control architecture}
+\label{tab:multi_rate}
 \end{table}
 
-The small magnitude of $k_e$ (order $10^{-3}$) reflects the fact that steering angles are measured in radians while lateral errors are measured in meters. At a typical cross-track error of 1~m, the normal driver produces a steering correction of $-0.005 \times 1.0 = -0.005$~rad ($\approx 0.3^\circ$), which is a realistic, gentle correction consistent with human driving behavior at highway speeds. The heading gain $k_\psi$ is three orders of magnitude larger, reflecting the importance of heading alignment: a heading error of $1^\circ$ ($\approx 0.017$~rad) produces a steering correction of $-0.5 \times 0.017 = -0.009$~rad ($\approx 0.5^\circ$).
+The vehicle dynamics are integrated at 100~Hz by Unity's fixed physics step. The
+longitudinal solver produces a new acceleration command every 100~ms; the lateral solver
+produces a new steering command every 50~ms, and only during the MERGE and FOLLOWING
+phases. Between solver updates, the most recent command is held constant. The state vector
+is updated at the fastest rate so that both solvers read current position, velocity, and
+heading at each invocation.
 
-These personality types affect the reference trajectories generated for the human driver in the Nash game formulation. A cautious driver's reference will exhibit larger gaps and slower lane changes, whereas an aggressive driver's reference will exhibit smaller gaps and faster lane changes.
+\section{Human Driver Models}
+\label{sec:human_driver}
+
+\subsection{Longitudinal: Online IDM Calibration}
+
+The human driver's longitudinal reference trajectory is generated by the Intelligent
+Driver Model (IDM) \cite{treiberCongestedTrafficStates2000}, with parameters calibrated online to
+the observed driver behavior. The IDM acceleration is:
+\begin{equation}
+a_{\text{IDM}} = a_{\max} \left[ 1 - \left( \frac{v}{v_0} \right)^\delta
+- \left( \frac{s^*(v, \Delta v)}{s} \right)^2 \right]
+\label{eq:idm}
+\end{equation}
+where $a_{\max}$ is the maximum acceleration, $v$ is the current velocity, $v_0$ is the
+desired velocity, $s$ is the current gap, $\delta = 4$ is the acceleration exponent, and
+$s^*$ is the desired gap:
+\begin{equation}
+s^*(v, \Delta v) = s_0 + v T + \frac{v \Delta v}{2\sqrt{a_{\max} b}}
+\label{eq:idm_desired_gap}
+\end{equation}
+where $s_0$ is the minimum standstill gap, $T$ is the desired time headway, $\Delta v$ is
+the velocity difference to the lead vehicle, and $b$ is the comfortable deceleration.
+
+The time headway parameter $T$ is estimated online from observed following behaviour using
+the method of Zhang and Sun \cite{zhangBayesianCalibrationIntelligent2024}. A circular buffer of 20 samples is
+maintained; at each longitudinal Nash tick (10~Hz), a new sample is admitted when the
+ego vehicle is following a visible leader with $|\Delta v| < 2\;\mathrm{m/s}$ and a
+positive headway. The headway regression yields $\hat{T}$, which is clamped to
+$[0.5,\;3.0]\;\mathrm{s}$ and applied with a fallback of $T = 1.5\;\mathrm{s}$ when
+fewer than ten samples have been collected. The remaining IDM parameters ($a_{\max}$,
+$s_0$, $b$) are fixed at values calibrated from the HighD naturalistic dataset
+\cite{krajewskiHighDDatasetDrone2018}: $a_{\max} = 0.553\;\mathrm{m/s^2}$,
+$s_0 = 3.416\;\mathrm{m}$, $b = 1.649\;\mathrm{m/s^2}$.
+
+\subsection{Lateral: Neuromuscular Steering Model}
+
+The human driver's lateral reference trajectory is generated by a quintic polynomial
+lane-change planner with a neuromuscular steering model following Swain and Rath
+\cite{swainCooperativeGameTheory2023}. The neuromuscular filter models the biomechanical lag between
+the driver's intended steering input and the actual wheel angle:
+\begin{equation}
+J\ddot{\delta} + B\dot{\delta} + K\delta = K\delta_{\text{cmd}}
+\label{eq:neuromuscular}
+\end{equation}
+where $J = 3.7 \times 10^{-3}\;\mathrm{kg\cdot m^2}$ is the steering column inertia,
+$B = 0.1363\;\mathrm{N\cdot m\cdot s/rad}$ is the damping coefficient, $K = 1.1742\;\mathrm{N\cdot m/rad}$
+is the stiffness, and $\delta_{\text{cmd}}$ is the commanded steering angle from the
+quintic planner. The lane-change duration for the human trajectory is computed from the
+relaxed heading constraint (Section~\ref{sec:lat_traj_planning}). Steering output is
+saturated at the vehicle's physical limit and passed through an EMA filter
+($\alpha = 0.2$) to suppress high-frequency noise.
+
 
 \section{Summary}
 
-This chapter presented the mathematical models used for vehicle dynamics in this thesis. The longitudinal model is a double integrator with state variables for position and velocity, discretized at 10~Hz using ZOH. The lateral model is a 4-state bicycle model in two formulations: a body-frame plant model for state integration and an error-frame controller model for MPC feedback, both capturing lateral position, lateral velocity, heading, and yaw rate. The body-frame model follows the standard derivation, while the error model includes explicit force-coupling terms ($A_c(2,3) = 2(C_f+C_r)/m$) that improve prediction consistency for the Nash solver. Vehicle dynamics are simulated at 100~Hz, with the lateral Nash MPC operating at 20~Hz and the longitudinal Nash MPC at 10~Hz.
+This chapter presented the mathematical models underlying the vehicle dynamics simulation.
+The longitudinal model is a double integrator with position and velocity as state variables,
+discretized at 10~Hz by zero-order hold. The lateral model is a four-state bicycle model
+with state vector $\mathbf{x} = [y,\;\dot{y}_{\text{b}},\;\psi,\;\dot{\psi}]^{\top}$,
+linearized at the current longitudinal velocity and discretized at 20~Hz. The cornering
+stiffness values ($C_{af} = 36\,500\;\mathrm{N/rad}$, $C_{ar} = 22\,300\;\mathrm{N/rad}$)
+reflect the asymmetric FWD weight distribution of the Audi TT platform.
 
-Both models are formulated in state-space form suitable for Model Predictive Control. The discrete-time formulations enable efficient implementation in the Nash equilibrium solver described in Chapter~4.
+Vehicle dynamics are integrated at 100~Hz. The lateral Nash solver operates at 20~Hz,
+exclusively during the MERGE and FOLLOWING phases, while the longitudinal Nash solver
+operates at 10~Hz throughout the merging sequence.
 
-Human driver behavior is modeled using the Intelligent Driver Model for longitudinal control and a modified Stanley Controller (linear PD formulation) for lateral control. Three personality types (cautious, normal, and aggressive) are defined through different parameter settings, with the Stanley gains reflecting realistic steering magnitudes at highway speeds.
-
-The multi-rate architecture allows each controller to operate at a rate appropriate for its dynamics while sharing state information through a common vehicle state vector updated at 100~Hz.
+The human driver's longitudinal reference is generated by the IDM with online time-headway
+calibration (Zhang and Sun \cite{zhangBayesianCalibrationIntelligent2024}), and the lateral reference by a quintic
+polynomial planner with a neuromuscular steering filter (Swain and Rath \cite{swainCooperativeGameTheory2023}).
+Both models provide the reference trajectories consumed by the Nash solver described in
+Chapter~4.
 
 %--------------------------------------------------------------
 % END OF CHAPTER 2
