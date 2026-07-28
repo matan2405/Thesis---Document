@@ -356,27 +356,34 @@ The shared output is
 u_{\text{shared}} = u_1^{*} + u_2^{*}
 \label{eq:shared_control_intro}
 \end{equation}
-where $u_1^{*}$ is the optimal control of the autonomous system, and $u_2^{*}$ is the
-optimal control of the human driver at the current time step. The two controls are
-summed directly rather than blended by a convex combination, since the authority balance
-is encoded in the Nash cost function of the human player rather than in an outer weighting
-rule \cite{pustilnikGeneralizedNashEquilibrium2025}.
+where $u_1^{*}$ is the first-step optimal control of the autonomous system and $u_2^{*}$
+is the first-step optimal control of the human player at the current Nash step.
+The two controls are summed directly rather than blended by a convex combination.
+Authority balance is encoded inside the Nash cost function rather than applied as an
+outer weighting rule \cite{pustilnikGeneralizedNashEquilibrium2025}.
 
-The authority balance is governed by an authority weight
+The authority balance is governed by the scalar weight
 \begin{equation}
 \alpha = \frac{1}{1 + \lambda}
 \label{eq:alpha_lambda}
 \end{equation}
-where $\alpha \in (0, 1]$ scales the control-effort weight of the human player, and
-$\lambda \geq 0$ is the authority ratio derived from the safety field force. The
-human's control-effort matrix is set to $R_2(\lambda) = R_2^{0} / \alpha$, so that a
-small $\alpha$ (equivalently, a large $\lambda$) penalizes deviations of $u_2^{*}$
-from zero and drives the human input toward the null control. Under nominal risk
-($\lambda = 0$) the weight reduces to $\alpha = 1$ and the human retains full
-authority. Under maximal risk ($\lambda \to \infty$) the weight decays to
-$\alpha \to 0$ and the system control $u_1^{*}$ becomes the dominant contribution to
-$u_{\text{shared}}$. The value of $\lambda$ is determined at each control step from
-the magnitude of the safety field force computed in the preceding subsection.
+where $\alpha \in (0,1]$ is the authority weight derived from the safety field force,
+and $\lambda \geq 0$ is the authority ratio. The weight $\alpha$ enters the Nash
+quadratic program by scaling the tracking-cost Hessian of Player~2:
+\begin{equation}
+P_2 = 2\bigl(\alpha\, H^{\top}Q_1 H + R_2 I\bigr)
+\label{eq:P2_alpha}
+\end{equation}
+where $H$ is the input-to-output prediction matrix, $Q_1$ is the shared tracking weight
+matrix, $R_2$ is the human player's control-effort weight, and $I$ is the identity matrix.
+A reduction in $\alpha$ attenuates the tracking Hessian $H^{\top}Q_1 H$ relative to the
+effort term $R_2 I$. Consequently, $u_2^*$ is driven toward zero and $u_1^*$ is allowed
+to dominate $u_{\text{shared}}$. Under nominal risk ($\lambda = 0$, $\alpha = 1$) the human
+player's cost is unmodified and full authority is retained. Under maximal risk
+($\lambda \to \infty$, $\alpha \to 0$) the tracking Hessian vanishes and
+$u_2^* \to 0$, so $u_{\text{shared}} \approx u_1^*$. The value of $\lambda$ is
+determined at each control step from the safety field force computed in the preceding
+step.
 
 \section{Research Objectives}
 
@@ -458,20 +465,33 @@ factor further attenuates the safety field force as the gap error decreases with
 the FOLLOWING-band threshold ($0.15\, d_{\text{des}}$), preventing abrupt changes in
 control demand at the phase boundary.
 
-The fourth contribution is a bidirectional longitudinal safety field. The field
-combines an elliptic leader force \cite{liSharedControlNovel2019} with a time-to-collision
-(TTC) force floor, a piecewise hard-zone response at close range, and a
-follower-weighted rear force. The TTC floor is
+The fourth contribution of this thesis is a bidirectional longitudinal safety field that
+combines an elliptic leader force \cite{liSharedControlNovel2019} with a
+time-to-collision (TTC) force floor and a follower-weighted rear force.
+The TTC floor is defined as
 \begin{equation}
 F_{\text{TTC}} = \text{ttc}_{\text{frac}} \cdot F_{\max}, \qquad
 \text{ttc}_{\text{frac}} = 1 - \mathrm{clip}\!\left(\tfrac{\mathrm{TTC} - \mathrm{TTC}_{\text{crit}}}{\mathrm{TTC}_{\text{warn}} - \mathrm{TTC}_{\text{crit}}}, 0, 1\right)
 \label{eq:ttc_floor}
 \end{equation}
-where $F_{\max} = 800$\,N is the saturation force, $\mathrm{TTC}_{\text{warn}} = 8$\,s
-is the TTC at which the floor begins to rise, and $\mathrm{TTC}_{\text{crit}} = 1.5$\,s
-is the TTC at which the floor reaches saturation. The hard-zone response saturates
-the leader force below $7$\,m gap and linearly interpolates between $7$ and $8$\,m.
-The follower contribution is weighted by $w_f = 0.5$ at steady state.
+where $F_{\max} = 800$\,N is the saturation force, $\mathrm{TTC}_{\text{warn}} = 5.5$\,s
+is the TTC threshold at which the floor begins to rise (Urgency~2 upper boundary,
+Lee~\cite{hsAnalysesRearEndCrashes2007}), and $\mathrm{TTC}_{\text{crit}} = 3.0$\,s is the TTC at
+which the floor reaches saturation (Urgency~3 ``forced'' threshold,
+Lee~\cite{hsAnalysesRearEndCrashes2007}).
+The leader force is saturated whenever the bumper-to-bumper gap falls below the minimum
+safe distance, defined as
+\begin{equation}
+d_{\min}(v_x) = \max\!\bigl(d_{\min}^{\text{floor}},\; \tau_{\min} \cdot v_x\bigr)
+\label{eq:d_min}
+\end{equation}
+where $d_{\min}^{\text{floor}} = 5$\,m is the low-speed floor, $\tau_{\min} = 1.0$\,s is
+the critical time headway as defined by Wang~\emph{et al.}~\cite{wangDrivingSafetyField2016},
+$v_x$ is the ego longitudinal speed, and $w_f = 0.5$ is the weighting coefficient applied
+to the rear-vehicle contribution at steady state.
+A linear interpolation region of width $1$\,m above $d_{\min}(v_x)$ is introduced, over
+which the force rises from zero to $F_{\max}$ as the gap closes.
+At $v_x = 20$\,m/s this yields $d_{\min} = 20$\,m and an emergency boundary at $21$\,m.
 
 The fifth contribution is an elliptic lateral safety field. The field is derived
 from the Li \emph{et al.} \cite{liSharedControlNovel2019} elliptic \emph{driving safety
@@ -727,26 +747,32 @@ v_x[k+1] &= v_x[k] + u[k]\,\Delta t
 \subsection{Control Constraints}
 \label{sec:long_constraints}
 
-The Nash solver enforces two levels of constraints. The first level is a wide solver
-ceiling imposed as box constraints on the OSQP quadratic program:
+Two levels of constraints are enforced by the Nash solver. At the first level, wide solver
+ceilings are imposed as box constraints on the OSQP quadratic program:
 \begin{equation}
 u \in [-20,\; 10]\ \text{m/s}^2, \qquad
 |\Delta u| \leq 15\ \text{m/s}^2\text{/step}
 \label{eq:long_solver_box}
 \end{equation}
-These bounds are deliberately wide: they act as numerical guardrails rather than
-comfort limits. The second level consists of physical bounds computed at each tick
-from the current vehicle state via \texttt{UpdatePhysicalBounds()}, which clips the
-commanded acceleration to what the powertrain and brake system can actually deliver.
+where $u$ is the commanded longitudinal acceleration, and $\Delta u = u[k] - u[k-1]$ is
+the inter-step increment. These bounds serve as numerical guardrails rather than comfort
+limits; physical saturation is addressed by the second level.
 
-For the human player, the inter-step rate cap is tighter:
+At the second level, physical bounds are computed at each control step from the
+current vehicle state via \texttt{UpdatePhysicalBounds()}, which clips the commanded
+acceleration to the envelope that the powertrain and brake system can actually deliver.
+
+For the human player, the inter-step rate is bounded by
 \begin{equation}
-|\Delta u_2| \leq 2.0\ \text{m/s}^2\text{/step}\ \rightarrow\ 0.2\ \text{m/s}^2\text{/s}\ \text{at 10\,Hz}
+|\Delta u_2| \leq 4.0\ \text{m/s}^2\text{/step}
+\quad \longrightarrow \quad
+0.4\ \text{m/s}^2\text{/s at } 10\,\text{Hz}
 \label{eq:long_human_jerk}
 \end{equation}
-This cap prevents inter-step oscillations in $u_2^*$ while preserving the Nash
-game's freedom to assign a nonzero human control. Comfort shaping beyond this hard
-cap is handled through the $R_2$ weight schedule described in
+where $\Delta u_2 = u_2[k] - u_2[k-1]$ is the inter-step change in the human player's
+optimal control. Inter-step oscillations in $u_2^*$ are thereby suppressed while the
+Nash game's freedom to assign a nonzero human control is preserved. Comfort shaping beyond
+this hard cap is handled through the $R_2$ weight schedule described in
 Chapter~\ref{ch:nash_framework}.
 
 \section{Lateral Vehicle Model}
@@ -763,7 +789,7 @@ I_z \ddot{\psi}        &= l_f F_{yf} - l_r F_{yr} \label{eq:yaw_moment}
 \end{align}
 where $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, $F_{yf}$ and $F_{yr}$
 are the lateral tire forces at the front and rear axles, $l_f$ is the distance from the
-centre of gravity to the front axle, and $l_r$ is the distance from the centre of gravity
+centre of gravity to the front axle, and $l_r$ is the distance from the center of gravity
 to the rear axle.
 
 The plant model integrates these equations using a load-dependent nonlinear tire force
@@ -793,21 +819,25 @@ per-wheel cornering stiffness $C_{af}$ (front) and $C_{ar}$ (rear):
 F_{yf} &= -2 C_{af} \alpha_f \label{eq:front_tire} \\
 F_{yr} &= -2 C_{ar} \alpha_r \label{eq:rear_tire}
 \end{align}
-where the factor of two converts per-wheel stiffness to the full axle, and the slip angles are
+where the factor of two converts per-wheel stiffness to the full-axle value, and the
+slip angles are
 \begin{align}
 \alpha_f &= \frac{\dot{y}_{\text{b}} + l_f \dot{\psi}}{v_x} - \delta \label{eq:front_slip} \\
 \alpha_r &= \frac{\dot{y}_{\text{b}} - l_r \dot{\psi}}{v_x} \label{eq:rear_slip}
 \end{align}
-where $\delta$ is the front wheel steering angle. Substituting into the equations of motion
-yields the continuous-time state-space representation
+where $\delta$ is the front wheel steering angle. These expressions are substituted into
+the equations of motion, and the kinematic relation $\dot{y} \approx \dot{y}_{\text{b}} + v_x\psi$
+from Eq.~\eqref{eq:global_y} is applied, yielding the continuous-time state-space
+representation
 \begin{equation}
 \dot{\mathbf{x}} = A_c(v_x)\, \mathbf{x} + B_c\, \delta
 \label{eq:lat_ss_continuous}
 \end{equation}
-where the velocity-dependent state matrix is
+where $\mathbf{x}$ is the state vector and $\delta$ is the steering input. The
+velocity-dependent state matrix is
 \begin{equation}
 A_c = \begin{bmatrix}
-0 & 1 & 0 & 0 \\[6pt]
+0 & 1 & v_x & 0 \\[6pt]
 0 & -\dfrac{2(C_{af}+C_{ar})}{m v_x} & 0 &
     \dfrac{2(l_r C_{ar} - l_f C_{af})}{m v_x} - v_x \\[6pt]
 0 & 0 & 0 & 1 \\[6pt]
@@ -822,9 +852,16 @@ B_c = \begin{bmatrix} 0 \\[4pt] \dfrac{2 C_{af}}{m} \\[4pt] 0 \\[4pt]
 \dfrac{2 l_f C_{af}}{I_z} \end{bmatrix}
 \label{eq:Bc_lat}
 \end{equation}
-Because $A_c$ depends on $v_x$, the model is a linear parameter-varying (LPV) system.
-The matrices are recomputed, and the OSQP prediction matrices rebuilt, whenever the
-longitudinal speed drifts more than $2\;\mathrm{m/s}$ from the last linearisation point.
+where $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, $l_f$ and $l_r$
+are the distances from the center of gravity to the front and rear axles, respectively,
+and $v_x$ is the longitudinal speed at the current linearization point. The
+$(1,3)$ entry of $A_c$ equals $v_x$, not zero. This term arises directly from the
+kinematic identity $\dot{y} = \dot{y}_{\text{b}} + v_x\psi$: differentiating the global
+lateral position $y$ introduces a coupling between the heading angle $\psi$ and the
+global lateral velocity $\dot{y}$ that is proportional to $v_x$. Because $A_c$ depends
+on $v_x$, the model constitutes a linear parameter-varying (LPV) system. The matrices
+are recomputed, and the OSQP prediction matrices rebuilt, whenever the longitudinal
+speed deviates by more than $2\;\mathrm{m/s}$ from the last linearization point.
 
 \subsection{Discrete-Time Representation}
 
