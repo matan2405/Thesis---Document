@@ -8,6 +8,8 @@
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
 \usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
 \usepackage{booktabs}
 \usepackage{siunitx}
 \usepackage{multirow}
@@ -789,7 +791,7 @@ I_z \ddot{\psi}        &= l_f F_{yf} - l_r F_{yr} \label{eq:yaw_moment}
 \end{align}
 where $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, $F_{yf}$ and $F_{yr}$
 are the lateral tire forces at the front and rear axles, $l_f$ is the distance from the
-centre of gravity to the front axle, and $l_r$ is the distance from the center of gravity
+center of gravity to the front axle, and $l_r$ is the distance from the center of gravity
 to the rear axle.
 
 The plant model integrates these equations using a load-dependent nonlinear tire force
@@ -1428,7 +1430,7 @@ where $y_{\mathrm{ego}}$ is the lateral position of the ego vehicle, $y_{\mathrm
 \label{eq:lat_exit_psi}
 \end{equation}
 
-where $\psi$ is the yaw angle of the ego vehicle relative to the road centreline.
+where $\psi$ is the yaw angle of the ego vehicle relative to the road centerline.
 
 \subsection{Virtual Mass Formulation}
 \label{sec:lat_virtual_mass}
@@ -1537,7 +1539,7 @@ d_{\mathrm{right}} = W_{\mathrm{road}}/2 - y_{\mathrm{ego}}, \qquad d_{\mathrm{l
 \label{eq:lat_boundary_dists}
 \end{equation}
 
-where $W_{\mathrm{road}}$ is the total road width and $y_{\mathrm{ego}}$ is measured from the road centreline. A repulsive potential is activated when either distance falls below the proximity threshold $d_{\mathrm{prox}} = 3.0\,\mathrm{m}$:
+where $W_{\mathrm{road}}$ is the total width of the road and $y_{\mathrm{ego}}$ is measured from the center line of the road. A repulsive potential is activated when either distance falls below the proximity threshold $d_{\mathrm{prox}} = 3.0\,\mathrm{m}$:
 
 \begin{equation}
 F_{\mathrm{boundary},k} = \pm\, K_b \cdot \tanh\!\left(\frac{1}{\max(d_k,\,\varepsilon_b)\,K_{b,s}}\right)
@@ -1568,145 +1570,470 @@ F_{\mathrm{out}}[k] = \alpha_f \cdot F_{\mathrm{clip}}[k] + (1 - \alpha_f)\cdot 
 \label{eq:lat_ema}
 \end{equation}
 
-where $\alpha_f$ is the EMA smoothing coefficient and $k$ is the discrete time index. The saturation bound of $\pm 2000\,\mathrm{N}$ is four times the longitudinal bound, reflecting the greater lateral inertia during a lane change. The coefficient $\alpha_f = 0.3$ is higher than the longitudinal value of $0.2$, yielding a faster response to sudden lateral threats while still attenuating high-frequency noise.
+where $\alpha_f$ is the smoothing coefficient of the EMA and $k$ is the discrete time index. The saturation bound of $\pm 2000\,\mathrm{N}$ is four times the longitudinal bound, reflecting the greater lateral inertia during a lane change. The coefficient $\alpha_f = 0.3$ is higher than the longitudinal value of $0.2$, yielding a faster response to sudden lateral threats while still attenuating high-frequency noise.
+
+\section{Dynamic Authority Allocation}
+\label{sec:authority_allocation}
+
+The authority ratio $\lambda[k]$ governs the balance between system control and human input at every Nash timestep. A high $\lambda$ transfers authority to the autonomous system. When $\lambda$ close to zero, It returns full control to the driver. Both the longitudinal and lateral allocators follow a three-stage architecture: (1) a sigmoid mapping from the safety field force, (2) a performance-based sigmoid following Swain and Rath~\cite{swainCooperativeGameTheory2023} Eq.\,15, and (3) fusion via element-wise maximum and adaptive exponential moving average (EMA) smoothing. The two channels share the same sigmoid kernel but differ in their normalization inputs and output bounds.
+
+\subsection{Shared Sigmoid Kernel}
+\label{sec:authority_sigmoid}
+
+The safety-field sigmoid maps a scalar risk magnitude $|F|$ to an authority ratio:
+
+\begin{equation}
+\lambda_{\mathrm{safety}} = \lambda_{\min} + \frac{\lambda_{\max} - \lambda_{\min}}{1 + \exp\!\bigl(-k_s\,(|F| - F_{\mathrm{mid}})\bigr)}
+\label{eq:safety_sigmoid}
+\end{equation}
+
+where $\lambda_{\min}$ and $\lambda_{\max}$ bound the output range, $F_{\mathrm{mid}}$ is the force midpoint at which $\lambda = (\lambda_{\min} + \lambda_{\max})/2$, and $k_s$ controls the transition steepness. The sigmoid is monotonically increasing in $|F|$: low risk force produces near-$\lambda_{\min}$ authority; force at or above $F_{\mathrm{mid}}$ drives $\lambda$ toward $\lambda_{\max}$.
+
+The performance-based sigmoid follows Swain and Rath~\cite{swainCooperativeGameTheory2023} Eq.\,15. A normalized performance index $\ell_n \in [0, 1]$ is defined from the tracking errors, and the authority ratio is derived through a sigmoid:
+
+\begin{equation}
+\gamma_1 = \frac{1}{1 + \exp\!\bigl(M_1(-\ell_n + M_2)\bigr)}, \qquad
+\lambda_{\mathrm{perf}} = \frac{1 - \gamma_1}{\gamma_1}
+\label{eq:swain_rath}
+\end{equation}
+
+where $M_1 = 2.0$ is the slope parameter and $M_2 = 0.5$ is the center shift. When $\ell_n = 1$ (zero tracking error), $\gamma_1 \to 1$ and $\lambda_{\mathrm{perf}} \to 0$, so the human retains authority. When $\ell_n = 0$ (maximum error), $\gamma_1 \to \sigma(-M_1 M_2) \approx 0.27$ and $\lambda_{\mathrm{perf}}$ rises sharply, transferring authority to the system.
+
+The two authority signals are fused by taking their element-wise maximum, subject to the configured ceiling:
+
+\begin{equation}
+\lambda_{\mathrm{raw}}[k] = \min\!\bigl(\max(\lambda_{\mathrm{safety}},\, \lambda_{\mathrm{perf}}),\; \lambda_{\max}\bigr)
+\label{eq:lambda_fusion}
+\end{equation}
+
+A high risk force \emph{or} a large tracking error is therefore sufficient to raise system authority, but neither can force $\lambda$ above $\lambda_{\max}$.
+
+\subsection{Longitudinal Authority Allocation}
+\label{sec:long_authority}
+
+\subsubsection{Stage 1 — Safety Sigmoid}
+
+The longitudinal safety field force $F_{\mathrm{total}}$ computed in Section~\ref{sec:longitudinal_field} is passed through Equation~\ref{eq:safety_sigmoid} with parameters $\lambda_{\min} = 0.1$, $\lambda_{\max} = 100$, $F_{\mathrm{mid}} = 400\,\mathrm{N}$, and $k_s = 0.015\,\mathrm{N}^{-1}$.
+
+\subsubsection{Stage 2 — Gap and Velocity Performance Sigmoid}
+
+The normalized performance index combines the gap error $e_{\mathrm{gap}}$ and velocity error $e_v$:
+
+\begin{equation}
+\ell_n = \mathrm{clip}\!\left(\min\!\left(1 - \frac{|e_{\mathrm{gap}}|}{e_{\mathrm{gap,max}}},\; 1 - \frac{|e_v|}{e_{v,\mathrm{max}}}\right),\; 0,\; 1\right)
+\label{eq:ln_long}
+\end{equation}
+
+where $e_{\mathrm{gap,max}} = 5.0\,\mathrm{m}$ and $e_{v,\mathrm{max}} = 1.5\,\mathrm{m/s}$ are the normalization maximum. Taking the minimum of the two terms ensures that a large error in either channel is sufficient to raise authority. When the ego vehicle has no forward leader, the velocity normalization is widened to $e_{v,\mathrm{max}} = 15.0\,\mathrm{m/s}$ and $\lambda$ is capped at $\lambda_{\max,\mathrm{NL}} = 2.0$, which prevents an authority spike during the initial speed-matching transient.
+
+\subsubsection{Stage 3 — Fusion and Adaptive EMA}
+
+The raw fused authority $\lambda_{\mathrm{raw}}[k]$ defined in Equation~\ref{eq:lambda_fusion} is smoothed through an adaptive EMA:
+
+\begin{equation}
+\lambda_{\mathrm{long}}[k] = \alpha_\lambda \cdot \lambda_{\mathrm{raw}}[k] + (1 - \alpha_\lambda)\cdot\lambda_{\mathrm{long}}[k-1]
+\label{eq:long_lambda_ema}
+\end{equation}
+
+where $\alpha_\lambda \in (0,1)$ is the smoothing coefficient and $\lambda_{\mathrm{long}}[k-1]$ is the authority ratio at the preceding Nash timestep. The coefficient $\alpha_\lambda$ adapts to the combined tracking error $e_{\mathrm{comb}} = \max(|e_{\mathrm{gap}}|, |e_v|)$:
+
+\begin{equation}
+\alpha_\lambda = \begin{cases}
+\alpha_{\mathrm{fast}} = 0.12 & e_{\mathrm{comb}} > 5.0\,\mathrm{m} \\[3pt]
+\alpha_{\mathrm{base}} + (\alpha_{\mathrm{fast}} - \alpha_{\mathrm{base}})\,\dfrac{e_{\mathrm{comb}} - 2.0}{3.0} & 2.0 < e_{\mathrm{comb}} \leq 5.0\,\mathrm{m} \\[3pt]
+\alpha_{\mathrm{base}} = 0.05 & e_{\mathrm{comb}} \leq 2.0\,\mathrm{m}
+\end{cases}
+\label{eq:long_alpha_adaptive}
+\end{equation}
+
+where $\alpha_{\mathrm{base}} = 0.05$ is the slow EMA coefficient and $\alpha_{\mathrm{fast}} = 0.12$ is applied when tracking error is large. During the \textsc{Following} phase, $\alpha_\lambda$ is held at $\alpha_{\mathrm{follow}} = 0.05$ and $\lambda$ is capped at $\lambda_{\max,\mathrm{follow}} = 5.0$, limiting authority in steady-state platoon following where aggressive corrections would reduce comfort.
+
+\subsection{Lateral Authority Allocation}
+\label{sec:lat_authority}
+
+\subsubsection{Stage 1 — Safety Sigmoid}
+
+The lateral safety field force from Section~\ref{sec:lateral_field} is passed through Equation~\ref{eq:safety_sigmoid} with $\lambda_{\min} = 0.1$, $\lambda_{\max} = 10$, $F_{\mathrm{mid}} = 200\,\mathrm{N}$, and $k_s = 0.025\,\mathrm{N}^{-1}$. The narrower range $\lambda \in [0.1, 10]$ compared with the longitudinal range $[0.1, 100]$ reflects the observation that excessive authority during a lane change produces abrupt steering corrections that reduce passenger comfort.
+
+\subsubsection{Stage 2 — Lane-Offset Performance Sigmoid}
+
+The normalized performance index for the lateral channel is derived from the lateral position error $e_y = y_{\mathrm{ego}} - y_{\mathrm{target}}$ relative to the half lane width:
+
+\begin{equation}
+\ell_n = \mathrm{clip}\!\left(\frac{W_{\mathrm{lane}}/2 - |e_y|}{W_{\mathrm{lane}}/2},\; 0,\; 1\right)
+\label{eq:ln_lat}
+\end{equation}
+
+where $W_{\mathrm{lane}} = 3.5\,\mathrm{m}$ is the nominal lane width and $e_y$ is the signed lateral deviation from the target lane center. When the ego vehicle is at the lane center ($e_y = 0$), $\ell_n = 1$ and $\lambda_{\mathrm{perf}} \to 0$; when $|e_y| \geq W_{\mathrm{lane}}/2$, $\ell_n = 0$ and authority rises to the sigmoid maximum. The same Swain--Rath kernel (Equation~\ref{eq:swain_rath}, $M_1 = 2.0$, $M_2 = 0.5$) is applied.
+
+\subsubsection{Stage 3 — Fusion and Adaptive EMA}
+
+The lateral EMA adapts to the absolute lateral error $|e_y|$:
+
+\begin{equation}
+\alpha_\lambda = \begin{cases}
+\alpha_{\mathrm{fast}} = 0.08 & |e_y| > 1.5\,\mathrm{m} \\[3pt]
+\alpha_{\mathrm{base}} + (\alpha_{\mathrm{fast}} - \alpha_{\mathrm{base}})\,\dfrac{|e_y| - 0.5}{1.0} & 0.5 < |e_y| \leq 1.5\,\mathrm{m} \\[3pt]
+\alpha_{\mathrm{base}} = 0.02 & |e_y| \leq 0.5\,\mathrm{m}
+\end{cases}
+\label{eq:lat_alpha_adaptive}
+\end{equation}
+
+where $\alpha_{\mathrm{base}} = 0.02$ is the slow lateral coefficient and $\alpha_{\mathrm{fast}} = 0.08$ applies when the lateral deviation exceeds $1.5\,\mathrm{m}$. The slow base coefficient makes the lateral authority change gradually near the lane center, preventing steering oscillation around the target line during steady-state lane keeping.
+
+\subsection{Conversion to Shared Control}
+\label{sec:authority_conversion}
+
+The authority ratio $\lambda[k]$ from either channel is converted to a scalar weighting $\alpha[k] \in (0, 1]$ following the mapping of Pustilnik and Borrelli~\cite{pustilnikGeneralizedNashEquilibrium2025}:
+
+\begin{equation}
+\alpha[k] = \frac{1}{1 + \lambda[k]}
+\label{eq:alpha_from_lambda}
+\end{equation}
+
+where $\alpha[k]$ is the weight applied to the human's tracking cost $Q_2$ inside the Nash solver: $\lambda \to 0$ (no system authority) gives $\alpha \to 1$ and the human cost is preserved at its nominal value; $\lambda \to \infty$ (full system authority) gives $\alpha \to 0$ and the human's tracking term vanishes, so the human's optimal action collapses onto the system reference. The Nash shared-control input is then:
+
+\begin{equation}
+u_{\mathrm{shared}}[k] = u_1^{*}[k] + u_2^{*}[k]
+\label{eq:shared_control}
+\end{equation}
+
+where $u_1^{*}$ and $u_2^{*}$ are the Nash equilibrium actions of the autonomous system (Player~1) and the human driver (Player~2), respectively. The authority weighting is embedded in the Nash cost matrices rather than applied to the outputs: the human's tracking weight is scaled by $\alpha[k]$, so under high risk ($\lambda \gg 1 \Rightarrow \alpha \to 0$) the human incurs almost no penalty for deviating from the system reference. The human's optimal response therefore aligns with $u_1^{*}$ without the system overriding the control channel directly.
 
 \section{Integration with Nash Equilibrium Control}
+\label{sec:nash_integration}
 
-\subsection{Authority Allocation Mechanism}
+The safety field and authority allocator described in the preceding sections (\ref{sec:longitudinal_field}, \ref{sec:lateral_field}, and \ref{sec:authority_allocation}) operate as an outer supervisory layer around the inner Nash equilibrium controller. This section defines the coupling between the two layers. The coupling comprises four elements: how the authority ratio $\lambda[k]$ enters the Nash cost matrices, how the two players' control inputs are combined, how the online driver model is updated, and how the multi-rate schedule maintains loop stability in real time.
 
-The safety field force directly influences the Nash equilibrium through the authority allocation mechanism. The authority ratio $\lambda$ determines the relative weighting between the system controller and the human driver in the Nash cost functions.
+\subsection{Control Loop Architecture}
+\label{sec:nash_loop}
 
-\subsubsection{Safety-Based Authority (Sigmoid)}
+The closed-loop signal flow is shown in Figure~\ref{fig:signal_flow}. Each block represents a self-contained module, and each arrow carries the scalar signal labeled beside it.
 
-The baseline authority is computed from the safety field force magnitude using a sigmoid function:
-\begin{equation}
-\lambda_{\text{safety}} = \lambda_{\min} + (\lambda_{\max} - \lambda_{\min}) \cdot \sigma(|F|)
-\label{eq:authority_sigmoid}
-\end{equation}
-where $\sigma(|F|) = \frac{1}{1 + e^{-k(|F| - F_0)}}$ is the sigmoid function with steepness $k = 0.015$ N$^{-1}$ and midpoint $F_0 = 400$ N. The authority bounds are $\lambda_{\min} = 0.1$ (human dominant when safe) and $\lambda_{\max} = 100$ (system dominant during emergencies).
-
-Table~\ref{tab:authority_mapping} shows representative values of the sigmoid mapping.
-
-\begin{table}[ht]
+\begin{figure}[H]
 \centering
-\begin{tabular}{|c|c|c|}
+\begin{tikzpicture}[
+    node distance = 8mm and 0mm,
+    block/.style  = {rectangle, draw, thick, rounded corners=2pt,
+                     minimum width=55mm, minimum height=10mm,
+                     align=center, font=\normalsize},
+    arrow/.style  = {-{Latex[length=2.5mm,width=2mm]}, thick},
+    signal/.style = {font=\small\itshape, midway, right=1mm}
+]
+    \node[block] (sf)     {Safety Field};
+    \node[block, below=of sf]     (aa)     {Authority Allocator};
+    \node[block, below=of aa]     (cost)   {Nash Cost Matrices};
+    \node[block, below=of cost]   (nash)   {Nash Solve};
+    \node[block, below=of nash]   (shared) {Shared Control};
+
+    \draw[arrow] (sf)     -- node[signal] {$F$}                        (aa);
+    \draw[arrow] (aa)     -- node[signal] {$\lambda$}                  (cost);
+    \draw[arrow] (cost)   -- node[signal] {$\alpha,\; Q_2$}            (nash);
+    \draw[arrow] (nash)   -- node[signal] {$u_1^{*},\; u_2^{*}$}       (shared);
+    \draw[arrow] (shared.south) --++ (0,-6mm) node[signal, below=1mm]  {$u_{\mathrm{shared}}$};
+\end{tikzpicture}
+\caption{Closed-loop signal flow from the safety field to the shared control output. Each arrow carries a scalar signal; the three modules never exchange internal state.}
+\label{fig:signal_flow}
+\end{figure}
+
+Here $F$ is the scalar safety force, $\lambda$ is the authority ratio, $\alpha = 1/(1+\lambda)$ is the weight applied to the human cost, and $u_{\mathrm{shared}} = u_1^{*} + u_2^{*}$ is the additive Nash output injected into the vehicle. The safety field never modifies vehicle inputs directly, and the Nash solver never reads the raw safety force.
+
+\subsection{Multi-Rate Scheduling}
+\label{sec:nash_scheduling}
+
+Three loops execute at different rates within a single ego vehicle, as summarized in Table~\ref{tab:multi_rate}.
+
+\begin{table}[H]
+\centering
+\caption{Multi-rate scheduling of the physics and Nash control loops for a single ego vehicle.}
+\label{tab:multi_rate}
+\begin{tabular}{llll}
 \hline
-\textbf{Force $|F|$ [N]} & \textbf{$\lambda_{\text{safety}}$} & \textbf{System Authority [\%]} \\
+\textbf{Loop} & \textbf{Symbol} & \textbf{Rate} & \textbf{Step} \\
 \hline
-$0$ & 0.12 & 11 \\
-$200$ & 0.83 & 45 \\
-$400$ & 50.1 & 98 \\
-$600$ & 97.3 & 99 \\
-$800$ & 99.8 & 99.9 \\
+Vehicle physics (FixedUpdate) & $T_{\mathrm{sim}}$  & 50\,Hz & $0.02\,\mathrm{s}$ \\
+Longitudinal Nash step         & $T_{\mathrm{long}}$ & 10\,Hz & $0.10\,\mathrm{s}$ \\
+Lateral Nash step              & $T_{\mathrm{lat}}$  & 20\,Hz & $0.05\,\mathrm{s}$ \\
 \hline
 \end{tabular}
-\caption{Authority allocation: sigmoid mapping from safety field force}
-\label{tab:authority_mapping}
 \end{table}
 
-\subsubsection{Performance-Based Authority with Hysteresis}
+The Nash loops run at lower rates than the physics loop because each solve involves an iterative best-response procedure over a prediction horizon of $N_p = 20$ steps, which is too expensive to run every 20\,ms. Between Nash ticks, the vehicle receives the last commanded shared control input, and the physics loop applies it unchanged.
 
-In addition to safety-based authority, a performance component responds to large gap errors that do not yet generate safety field forces (e.g., the vehicle is far from its target but not near any obstacle). To prevent oscillation at mode boundaries, hysteresis logic is employed:
-\begin{equation}
-\text{Performance mode} = \begin{cases}
-\texttt{ON} & \text{if previously OFF and } |e_{\text{gap}}| > e_{\text{enter}} \\
-\texttt{OFF} & \text{if previously ON and } |e_{\text{gap}}| < e_{\text{exit}} \\
-\text{unchanged} & \text{otherwise}
-\end{cases}
-\label{eq:hysteresis}
-\end{equation}
-where $e_{\text{enter}} = 3.0$ m and $e_{\text{exit}} = 1.0$ m. When performance mode is active, $\lambda_{\text{performance}}$ increases progressively with gap error, capped at 50.
+Both Nash loops remain inactive during the \textsc{Approach} phase (before the driver requests a merge), while the vehicle is under full manual control. When the driver send a join request the, coordinator enables Nash and transitions the phase state to \textsc{GapSearch}, at which point both loops activate simultaneously. They remain active through \textsc{Merge} and \textsc{Following}. To ensure a smooth handover at the \textsc{Approach} to \textsc{GapSearch} transition, both solvers are continuously warm-started during \textsc{Approach} from the driver's current control inputs and the measured vehicle state; the warm-start mechanism is described in detail in Section~\ref{sec:nash_warm}.
 
-\subsubsection{Authority Fusion and Smoothing}
+\subsection{Authority Injection into Nash Cost Matrices}
+\label{sec:nash_alpha}
 
-The final authority ratio is the maximum of the two components, followed by exponential smoothing:
+The Nash equilibrium formulation optimizes two quadratic cost functions defined as integrals of the instantaneous stage cost over the finite prediction horizon $[t, t + T_p]$:
+
 \begin{align}
-\lambda_{\text{target}} &= \max(\lambda_{\text{safety}}, \lambda_{\text{performance}}) \label{eq:authority_fusion} \\
-\lambda[k] &= \alpha \cdot \lambda_{\text{target}} + (1 - \alpha) \cdot \lambda[k-1] \label{eq:authority_smoothing}
+J_1(u_1, u_2) &= \int_{t}^{t+T_p} \Bigl( \bigl\| y(\tau) - r_1(\tau) \bigr\|_{Q_1}^{2} + \bigl\| u_1(\tau) \bigr\|_{R_1}^{2} \Bigr) \, \mathrm{d}\tau \label{eq:nash_j1} \\
+J_2(u_1, u_2) &= \int_{t}^{t+T_p} \Bigl( \alpha \cdot \bigl\| y(\tau) - r_2(\tau) \bigr\|_{Q_2}^{2} + \bigl\| u_2(\tau) \bigr\|_{R_2}^{2} \Bigr) \, \mathrm{d}\tau \label{eq:nash_j2}
 \end{align}
-where $\alpha \in [\alpha_{\text{base}}, \alpha_{\text{fast}}] = [0.05, 0.12]$ adapts based on the gap error magnitude: faster smoothing for large errors (quick response) and slower smoothing for small errors (comfort).
 
-The system authority weight is computed from $\lambda$:
+where $\tau$ is the prediction time variable, $t$ is the current time, $T_p = N_p \cdot T_{\mathrm{Nash}}$ is the prediction horizon length, $y(\tau)$ is the predicted output trajectory under the joint control $u(\tau) = u_1(\tau) + u_2(\tau)$, $r_1(\tau)$ and $r_2(\tau)$ are the system and human reference trajectories, $Q_1$ and $Q_2$ are the tracking-weight matrices for the two players, and $R_1$, $R_2$ are the effort penalties on each player's individual input. For numerical solution the horizon is discretized into $N_p = 20$ steps of duration $T_{\mathrm{Nash}}$, the linearized vehicle model is rolled out from the current state $\mathbf{x}_0$ over the horizon, and the resulting predicted output takes the compact stacked form $Y = H\,U + F\,\mathbf{x}_0$, where $H$ is the input-to-output prediction matrix, $F$ is the free-response matrix, and $U$ is the stacked joint control sequence. Under this discretization, Equations~\ref{eq:nash_j1}--\ref{eq:nash_j2} reduce to quadratic programs in the stacked $u_1$ and $u_2$ sequences respectively.
+
+The scalar $\alpha = 1/(1+\lambda)$ scales the human's tracking weight. At $\lambda = 0.1$ (safe conditions), $\alpha \approx 0.91$ and the human's reference dominates. At $\lambda = 100$ (emergency), $\alpha \approx 0.01$ and the human's tracking penalty nearly vanishes, so the human's optimal input aligns with the system reference $r_1$.
+
+Rather than rebuilding the quadratic programming (QP) problem structure at every Nash tick, the solver pre-computes a set of problem instances at initialization, one for each level of a discrete $\lambda$ grid. The longitudinal channel uses $L_\lambda = 11$ levels and the lateral channel uses $7$ levels, both log-spaced over $[0.1, 100]$ and $[0.1, 10]$ respectively. At runtime the requested $\lambda$ is snapped to the nearest grid point in log-space, and the corresponding pre-computed problem instance is solved. This removes the most expensive numerical step of the QP setup from the real-time control loop and keeps the per-tick computational cost bounded.
+
+\subsection{Adaptive Human Weight $R_2$}
+\label{sec:nash_r2}
+
+In addition to the $\alpha$ scaling of $Q_2$, the human's effort penalty $R_2$ is adapted online to reflect how synchronized the ego vehicle is with the platoon. A normalized synchronization index is computed as
+
 \begin{equation}
-\alpha_{\text{sys}} = \frac{\lambda}{1 + \lambda}
-\label{eq:authority_alpha}
+\ell_n = \min\!\left(1 - \frac{|e_{\mathrm{gap}}|}{e_{\mathrm{gap,max}}},\; 1 - \frac{|e_v|}{e_{v,\mathrm{max}}}\right) \in [0, 1]
+\label{eq:ln_sync}
 \end{equation}
 
-This creates the control loop:
+where $e_{\mathrm{gap}}$ and $e_v$ are the instantaneous gap and velocity errors relative to the target platoon state, $e_{\mathrm{gap,max}}$ and $e_{v,\mathrm{max}}$ are their normalization bounds, $\ell_n = 0$ indicates the ego is far from the platoon in both gap and velocity, and $\ell_n = 1$ indicates full synchronization. The target $R_2$ interpolates linearly between an initial value $R_{2,\mathrm{start}}$ (large, restraining the human when far away) and a following value $R_{2,\mathrm{follow}}$ (small, giving the human more authority in steady state):
+
 \begin{equation}
-\text{Safety Field} \xrightarrow{F} \text{Authority Allocator} \xrightarrow{\lambda} \text{Nash Weights} \xrightarrow{u_1, u_2} \text{Shared Control} \xrightarrow{u_{\text{shared}}} \text{Vehicle}
-\label{eq:control_loop}
+R_{2,\mathrm{target}} = R_{2,\mathrm{start}} + \left(R_{2,\mathrm{follow}} - R_{2,\mathrm{start}}\right) \ell_n
+\label{eq:r2_target}
 \end{equation}
+
+where $R_{2,\mathrm{target}}$ is the interpolated target effort penalty at the current synchronization index. The current $R_2$ tracks this target through an exponential moving average (EMA) with coefficient $\alpha_{R_2} = 0.05$. A dead-band update threshold prevents the sparse QP $P$ matrix from being rebuilt when the change in $R_2$ is below $\Delta R_{2,\min}$, which reduces per-tick allocation cost.
+
+\subsubsection{Activity-Based $R_2$ Scaling}
+
+Following Lazcano et al.~\cite{lazcanoMPCBasedHapticShared2021}, an additional scaling reduces $R_2$ when the driver applies non-trivial pedal or steering input:
+
+\begin{equation}
+R_{2,\mathrm{eff}} = R_{2,\mathrm{current}} \cdot \left(1 - \mathrm{clip}\!\left(\frac{\mathrm{activity}}{0.3},\, 0,\, 1\right)\left(1 - s_{\min}\right)\right)
+\label{eq:r2_activity}
+\end{equation}
+
+where $\mathrm{activity} \in [0, 1]$ is the maximum of throttle, brake, or absolute steering input, $R_{2,\mathrm{current}}$ is the value tracked by the EMA update, and $s_{\min} = 0.3$ is the minimum residual scale. The driver is thereby given perceptible authority during intentional inputs: pressing the pedal amplifies the human contribution $u_2$ even when the safety-based $\lambda$ would otherwise suppress it.
+
+\subsubsection{Conflict-Based $R_2$ Boost (Lateral Only)}
+
+During the \textsc{Merge} phase, a moving-average filter over the last five Nash ticks detects opposing steering intents between the system ($u_1$) and the human ($u_2$):
+
+\begin{equation}
+\mathrm{conflict}[k] = \begin{cases}
+1 & \mathrm{sign}(u_1) \neq \mathrm{sign}(u_2) \text{ and both above threshold} \\
+0 & \text{otherwise}
+\end{cases}
+\label{eq:conflict_indicator}
+\end{equation}
+
+where the threshold on each input is $10^{-4}$ rad and $\mathrm{conflict}[k]$ is the binary indicator of an opposing-intent event at tick $k$. When the moving-average $\overline{\mathrm{conflict}}$ exceeds a $0.2$ dead-band, the lateral $R_2$ is boosted according to
+
+\begin{equation}
+R_{2,\mathrm{lat}} \leftarrow R_{2,\mathrm{lat}} \cdot \left(1 + b_c\right), \quad b_c = B_{\max} \cdot \mathrm{clip}\!\left(\frac{\overline{\mathrm{conflict}} - 0.2}{0.6},\, 0,\, 1\right)
+\label{eq:conflict_boost}
+\end{equation}
+
+where $B_{\max} = 0.5$ is the maximum boost, $\overline{\mathrm{conflict}}$ is the moving-average conflict rate, and $b_c \in [0, B_{\max}]$ is the resulting scaling factor. The boost is zero below the 0.2 dead-band, ramps linearly through the interval $[0.2, 0.8]$, and saturates at $B_{\max}$ above 0.8. The moving-average filter ensures that isolated one-tick disagreements between the two players (for example, transient sensor noise) do not trigger a boost; only a sustained tug-of-war lasting at least one full tick window raises $R_{2,\mathrm{lat}}$, which reduces the magnitude of $u_2^{*}$ in subsequent solves and damps prolonged steering oscillation.
+
+The boost is applied only during the \textsc{Merge} phase. In \textsc{Following}, the adaptive $Q_1$ mechanism described in Section~\ref{sec:nash_q1} already suppresses residual lateral offsets, and applying both mechanisms concurrently would double-count the correction.
+
+\subsection{Adaptive Cost Matrix $Q_1$ in Following Phase}
+\label{sec:nash_q1}
+
+In the \textsc{Following} phase, small lateral offsets from the platoon lane center can grow into a limit cycle if the tracking weight remains constant. To prevent this, $Q_1$ (the system tracking weight for the lateral position and heading states) is adapted based on the fraction of the lane the ego occupies:
+
+\begin{equation}
+\beta_y = \mathrm{clip}\!\left(\frac{|e_y| - d_{\mathrm{dead}}}{W_{\mathrm{lane}}/2 - d_{\mathrm{dead}}},\, 0,\, 1\right)
+\label{eq:beyond_frac}
+\end{equation}
+
+where $e_y$ is the lateral offset from the lane center, $W_{\mathrm{lane}}$ is the lane width, $d_{\mathrm{dead}} = 0.03\,\mathrm{m}$ is a narrow dead-band around the lane center, and $\beta_y \in [0,1]$ is the resulting encroachment fraction. The lateral position weight $Q_y$, heading weight $Q_\psi$, and their terminal counterparts $Q_{y,\mathrm{T}}$, $Q_{\psi,\mathrm{T}}$ are linearly interpolated between their nominal and beyond-boundary values:
+
+\begin{equation}
+Q_y[k] = Q_{y,\mathrm{nom}} + \left(Q_{y,\mathrm{boundary}} - Q_{y,\mathrm{nom}}\right) \beta_y
+\label{eq:qy_adapt}
+\end{equation}
+
+where $Q_{y,\mathrm{nom}}$ is the nominal in-lane weight and $Q_{y,\mathrm{boundary}}$ is the elevated weight applied at the lane boundary. Both players share the same $Q_1$, so both incur a high cost when $|e_y|$ approaches the half-lane width. The system input $u_1$ therefore grows to correct the offset, and the human's Nash response aligns with $u_1$ under the increased shared penalty.
+
+\subsection{Online Driver Model Calibration}
+\label{sec:nash_driver_calib}
+
+The human reference trajectory $r_2$ used in Equation~\ref{eq:nash_j2} is generated by an Intelligent Driver Model (IDM) whose parameters are calibrated online during the run. Following Zhang and Sun~\cite{zhangBayesianCalibrationIntelligent2024}, the desired time gap $T$ is estimated by inverting the IDM equilibrium condition during the \textsc{GapSearch} and \textsc{Merge} phases (valid when $|\Delta v| < 2\,\mathrm{m/s}$ and $v_x < v_0$), and by direct measurement $T = (\mathrm{gap} - s_0)/v_x$ during \textsc{Following}, where $\Delta v$ is the relative velocity to the leader, $v_x$ is the ego longitudinal speed, $v_0$ is the IDM desired free-flow speed, and $s_0$ is the IDM jam-distance parameter. This estimate flows into the reference generator so that the human reference reflects the driver's actual preference for gap size, rather than a fixed nominal value.
+
+Because the calibration consumes only measured vehicle state (gap, relative velocity, longitudinal speed), and does not read the Nash output, no circular dependency arises between the driver model and the shared controller.
+
+\subsection{Warm-Starting and Re-Linearization}
+\label{sec:nash_warm}
+
+Two techniques keep the solver responsive to fast state transients without full re-initialization.
+
+\textbf{Warm-starting.}  Every Nash solve is initialized from two sources: the current \emph{physical state} $\mathbf{x}_0$ and an initial \emph{control guess}. The physical state $\mathbf{x}_0$ is read from the vehicle simulator at the start of each solve rather than stored between solves: the longitudinal solver receives $\mathbf{x}_0 = [x,\, v_x]^{\top}$, and the lateral solver receives $\mathbf{x}_0 = [y,\, \dot{y},\, \psi,\, \dot{\psi}]^{\top}$. This guarantees that each solve begins from the vehicle's true pose and velocity, not from a propagated prediction that may have drifted from the physics.
+
+The control initial guess consists of the previous-input buffer and the two best-response warm-start sequences $\mathbf{u}_{\mathrm{ws},1}$, $\mathbf{u}_{\mathrm{ws},2}$ that seed the iterative best-response loop across the full prediction horizon $N_p$. The seeding source depends on the phase:
+    
+    
+    On the phase \textsc{Approach}, the longitudinal buffers and warm-start sequences are filled at every physics tick with the measured vehicle acceleration $a_x$; the lateral buffers and sequences are filled at every physics tick with the driver's measured steering angle $\delta$, and the internal lateral-acceleration history $a_{\mathrm{lat}}$ is refreshed from the measured $a_{\mathrm{lat}}$. Because the Nash solver does not execute during \textsc{Approach}, this seeding runs at the physics rate (50\,Hz), keeping the solver's internal state continuously aligned with the manually controlled vehicle.
+
+    On the phases \textsc{GapSearch}, \textsc{Merge}, \textsc{Following}, the buffers and sequences are updated from the previous Nash solution. The lateral solver additionally performs a one-shot re-seeding from the driver's current steering angle on the first tick of \textsc{GapSearch}, so that the handover from manual to Nash begins from the actual steering wheel position.
+
+The combined effect is that at the \textsc{Approach}~$\to$~\textsc{GapSearch} transition, the first Nash solve starts from the vehicle's true state $\mathbf{x}_0$ and from a control guess that matches the manual input immediately before the handover. The commanded acceleration and steering angle therefore remain continuous through the transition, and the iterative best-response loop typically converges within a small number of iterations because the warm-start already lies close to the new optimum.
+
+\textbf{Re-linearization.} The vehicle state-space matrices $(A, B)$ used to build $H$ depend on the current longitudinal speed $v_x$. When $v_x$ drifts by more than a threshold (0.5\,m/s for the longitudinal channel, and at every tick for the lateral channel due to the Coriolis sensitivity), the matrices are recomputed and $H$ is rebuilt. This keeps the linearization error bounded across the wide speed range spanned by a merge from $20$ to $33\,\mathrm{m/s}$.
+
+\subsection{Shared Control Output and Injection}
+\label{sec:nash_output}
+
+Both Nash solvers return the first-step optimal actions $u_1^{*}[k]$ and $u_2^{*}[k]$ of Players~1 and~2 respectively. The shared control input is their algebraic sum, but the saturation bounds and the injection mechanism differ between the two channels.
+
+\subsubsection{Longitudinal Channel}
+
+The longitudinal shared control is a desired acceleration, clamped to the vehicle's speed-dependent physical acceleration bounds:
+
+\begin{equation}
+u_{\mathrm{shared}}^{\mathrm{long}}[k] = \mathrm{clip}\!\left(u_1^{*}[k] + u_2^{*}[k],\; a_{\min}(v_x),\; a_{\max}(v_x)\right)
+\label{eq:nash_ushared_long}
+\end{equation}
+
+where $a_{\min}(v_x)$ and $a_{\max}(v_x)$ are the speed-dependent deceleration and acceleration limits derived from the powertrain torque map and brake capacity of the ego vehicle, and $u_{\mathrm{shared}}^{\mathrm{long}}[k]$ is the clamped longitudinal acceleration command at tick $k$. The clamped acceleration is then converted to throttle and brake commands through the vehicle's inverse engine map, which inverts the steady-state force-to-acceleration relationship of the powertrain and brake system to produce a pair $(\mathrm{throttle}, \mathrm{brake}) \in [0, 1] \times [0, 1]$ with at most one non-zero component per tick. These pedal commands are written directly into the vehicle's input registers for consumption by the physics update.
+
+\subsubsection{Lateral Channel}
+
+The lateral shared control is a desired road-wheel angle, clamped to the mechanical steering-rack limits:
+
+\begin{equation}
+\delta_{\mathrm{shared}}[k] = \mathrm{clip}\!\left(u_1^{*}[k] + u_2^{*}[k],\; \delta_{\min},\; \delta_{\max}\right)
+\label{eq:nash_ushared_lat}
+\end{equation}
+
+where $\delta_{\min}$ and $\delta_{\max}$ are the minimum and maximum admissible road-wheel angles in radians, and $\delta_{\mathrm{shared}}[k]$ is the clamped steering angle command. Because the vehicle's steering input register expects a normalized value in $[-1, 1]$ rather than an angle, the command is scaled by the maximum wheel angle before injection:
+
+\begin{equation}
+\delta_{\mathrm{norm}}[k] = \mathrm{clip}\!\left(\frac{\delta_{\mathrm{shared}}[k]}{\delta_{\max}^{\mathrm{wheel}}},\; -1,\; 1\right)
+\label{eq:nash_steer_norm}
+\end{equation}
+
+where $\delta_{\max}^{\mathrm{wheel}}$ is the maximum road-wheel angle (in radians) obtained from the vehicle parameter set as $\delta_{\max}^{\mathrm{wheel}} = \pi \cdot \theta_{\max}^{\mathrm{deg}} / 180$, and $\delta_{\mathrm{norm}}[k]$ is the normalized steering command. If the Nash lateral solver fails to converge on a given tick (a rare event triggered by singular linearizations at very low speed), the coordinator falls back to a proportional controller $u_1 = -0.1 \cdot e_y$, $u_2 = 0$, which keeps the vehicle centered while the solver recovers on the following tick.
 
 \subsection{Separation of Concerns}
+\label{sec:nash_separation}
 
-The architecture maintains a clear separation between the three components. The \textbf{Nash Equilibrium} enables optimal trajectory tracking via cost-function optimization, in which both longitudinal (gap and velocity tracking) and lateral (position and heading tracking) controllers share the same Nash framework within DMPC. The \textbf{Safety Field} handles collision avoidance via repulsive forces, generating force only when collision risk exists, thereby enabling Nash to operate without interference when the vehicle is safe. The \textbf{Phase Detection} handles context awareness, distinguishing active merging from steady-state following and enabling different control strategies for different situations.
+The layered architecture keeps three responsibilities distinct. The \textbf{Nash controller} produces optimal cooperative actions given the current cost matrices and reference trajectories. The \textbf{safety field} generates a collision-risk signal that never bypasses the Nash channel. The \textbf{phase detector} switches parameter sets (fade thresholds, EMA rates, weight bounds) between operating regimes. Because the safety field influences the Nash solve only through the scalar $\lambda$, the Nash problem remains well-posed and convex regardless of the safety force magnitude, and the safety layer can be enabled or disabled without changing the solver structure. This separation is what allows the same Nash formulation to be reused for both longitudinal and lateral control, with only the state-space matrices, reference generators, and weight bounds changing between the two channels.
 
-This separation ensures that normal operation relies on Nash for smooth, optimal control, that safety intervention occurs only when genuinely needed, and that transitions between modes are smooth and predictable.
+% POLISHED: §3.6 Computational Considerations
 
 \section{Computational Considerations}
+\label{sec:chap3_compute}
 
-\subsection{Complexity Analysis}
+The shared-control layer described in this chapter must run in real time inside the Unity physics loop of a single ego vehicle. Three engineering aspects determine whether the design meets that budget: the per-tick complexity of each module, the numerical measures that keep the outputs bounded and continuous, and the mechanisms that suppress redundant work between ticks.
 
-The \textbf{Longitudinal Safety Field} has time complexity $O(1)$ since a constant number of vehicles are considered. The update rate is 10 Hz, matching the longitudinal controller, and the typical computation time is under 1 ms.
+\subsection{Per-Tick Complexity}
+\label{sec:chap3_complexity}
 
-The \textbf{Lateral Safety Field} has time complexity $O(N_{\text{obs}})$ where $N_{\text{obs}}$ is the number of obstacles. The update rate is 20 Hz, matching the lateral Nash MPC controller, with typical computation time under 0.5 ms for 3--5 obstacles.
+\textbf{Safety fields.} The longitudinal safety field iterates over at most one leader and one follower per ego vehicle, so its per-tick cost is $\mathcal{O}(1)$. The lateral safety field iterates over all $N_{\mathrm{obs}}$ platoon vehicles to accumulate the elliptic potential, giving $\mathcal{O}(N_{\mathrm{obs}})$, where $N_{\mathrm{obs}}$ is the number of platoon vehicles in the ego's neighborhood. In the merging scenarios of Chapter~5, $N_{\mathrm{obs}} \leq 5$. Both fields therefore complete within tens of microseconds on a mid-range central processing unit (CPU).
+
+\textbf{Authority allocator.} The three-stage allocator of Section~\ref{sec:authority_allocation} evaluates two sigmoids and one exponential moving average (EMA) per channel per Nash tick, each an $\mathcal{O}(1)$ arithmetic expression.
+
+\textbf{Nash solve.} Each Nash step formulates and solves a small convex quadratic program (QP) of dimension $N_p \times N_u$, where $N_p = 20$ is the prediction horizon and $N_u \in \{1, 2\}$ is the number of inputs per player. The solver internals are developed in Chapter~4; from the perspective of the shared-control layer, the per-tick QP cost is bounded by design through the pre-factored $\lambda$ grid of Section~\ref{sec:nash_alpha}.
 
 \subsection{Numerical Stability}
+\label{sec:chap3_stability}
 
-Several measures ensure numerical stability. Epsilon regularization adds $\epsilon = 0.1$ m to all distance denominators. Force saturation through defined limits prevents unbounded outputs. Low-pass filtering smooths parameter and force transitions. Tanh saturation provides natural, smooth limiting for high forces.
+Several small measures keep the field outputs bounded and continuously differentiable, so that the downstream sigmoid mappings and the Nash cost matrices never receive singular or diverging inputs.
+
+\textbf{Epsilon regularization.} All distance denominators are lower-bounded before use. The elliptic ratio $r^{*}$ is floored at $\varepsilon = 10^{-3}$, the boundary distance $d_k$ is floored at $\varepsilon_b = 0.1\,\mathrm{m}$, and the gap $d$ inside the longitudinal potential is floored at $\varepsilon = 0.1\,\mathrm{m}$. These floors eliminate $1/0$ singularities without materially changing the field shape away from the singular point.
+
+\textbf{Force saturation.} All fields are hard-clipped to their configured maxima ($F_{\mathrm{long,max}} = 800\,\mathrm{N}$, $F_{\mathrm{lat,max}} = 2000\,\mathrm{N}$) before being passed to the authority allocator, so a numerical excursion inside the potential cannot propagate into an unbounded authority command.
+
+\textbf{Smooth switching.} The hyperbolic tangent $\tanh$ replaces every hard sign function in the field: the lateral direction assignment ($\tanh(d_y/\sigma)$), the boundary repulsion, and the phase-fade transitions. The total field is therefore continuously differentiable in the vehicle state, which keeps the authority ratio $\lambda$ continuous through phase transitions.
+
+\textbf{First-order filtering.} The safety force ($\alpha_f = 0.2$ longitudinal, $0.3$ lateral), the field parameters $(s, M_o, R_i, DR)$, the human effort penalty $R_2$, and the authority ratio $\lambda$ itself are all smoothed through EMA filters. The one deliberate exception is the emergency zone of the longitudinal field, where the EMA is bypassed so that a hard-brake command reaches the authority allocator without lag.
+
+\subsection{Avoiding Redundant Work}
+\label{sec:chap3_avoidwork}
+
+Two mechanisms cut the number of expensive operations per tick.
+
+\textbf{Dead-band update thresholds.} The QP Hessian $P$ is rebuilt only when the change in $R_2$ or $Q_y$ exceeds a configured threshold ($\Delta R_{2,\min}$ or $\Delta Q_{y,\min}$). Sub-threshold changes are accumulated in the EMA state but do not trigger a matrix rebuild, so per-tick allocation and sparsity-pattern recomputation are suppressed when the tracking error is quasi-static.
+
+\textbf{Pre-factored $\lambda$ grid.} As described in Section~\ref{sec:nash_alpha}, the solver holds one factorized problem instance per discrete $\lambda$ level ($L_\lambda = 11$ longitudinal, $7$ lateral). At runtime the requested $\lambda$ is snapped to the nearest grid point, which removes the most expensive numerical step of QP setup from the real-time execution path.
+
+Taken together, these measures keep the per-tick cost of the safety field, authority allocator, and Nash solve bounded and independent of scenario duration, so that the closed-loop control runs at the target multi-rate schedule (Table~\ref{tab:multi_rate}) without dropped ticks.
 
 \section{Summary}
+\label{sec:chap3_summary}
 
-This chapter presented the safety field formulations for both longitudinal and lateral control. Six key contributions emerge from this work.
+This chapter developed the shared-control architecture of the platoon-merging system in three parts: the safety field formulation, the dynamic authority allocator, and the coupling to the Nash equilibrium controller. The main design choices are recapitulated below.
 
-First, the \textbf{Pure Repulsive Design} ensures that forces are generated only when collision risk exists, specifically when $e_{\text{gap}} < 0$ for longitudinal control and $d_y < d_{\text{safe}}$ for lateral control. This enables Nash to control trajectories without interference when the vehicle is safe.
+\textbf{Elliptic driving safety field.} The longitudinal channel (Section~\ref{sec:longitudinal_field}) and the lateral channel (Section~\ref{sec:lateral_field}) share the Wang--Li elliptic driving safety field formulation~\cite{wangDrivingSafetyField2015,wangDrivingSafetyField2016,liSharedControlNovel2019}. The field is parameterized by a speed-dependent virtual mass $M_i(v_i)$, an elliptic distance metric $r^{*}$ whose semi-axes scale with the relative velocity, kinetic corrections for the obstacle and ego velocities, and a driver risk addend $DR$. This unified formulation replaces the earlier two-threshold collision-based approach, and produces a continuously differentiable field over the two-dimensional plane.
 
-Second, the \textbf{Dynamic Phase Detection} uses state-based rather than timer-based phase transitions with hysteresis to prevent oscillations and enable context-appropriate control responses.
+\textbf{Bidirectional longitudinal field with regime switching.} Four regimes are combined in the longitudinal field: hard safety zones with force saturation below a speed-dependent minimum gap, the elliptic potential of Li et al., a time-to-collision (TTC) floor that ramps between $T_{\mathrm{warn}} = 5.5\,\mathrm{s}$ and $T_{\mathrm{crit}} = 3.0\,\mathrm{s}$, and a bounded attractive regime for large positive gaps. Follower and leader contributions are combined with an asymmetric weight $w_f = 0.5$, chosen to reflect the forward-dominant information flow of Cooperative Adaptive Cruise Control (CACC).
 
-Third, the \textbf{Soft Transition Function} provides quadratic scaling in the FOLLOWING phase, ensuring smooth force reduction as errors decrease.
+\textbf{Phase-dependent soft transition.} A quadratic fade scales the leader force near the desired gap. The fade threshold is tighter in \textsc{Merge} ($\gamma_{\mathrm{merge}} = 0.08$) than in \textsc{Following} ($\gamma_{\mathrm{follow}} = 0.15$). The field therefore applies its full magnitude during aggressive gap closure and then relaxes into steady-state platoon following.
 
-Fourth, the \textbf{Bidirectional Longitudinal Field} employs asymmetric leader/follower weighting with $w_f \in [0.2, 0.5]$ to reflect CACC information flow characteristics.
+\textbf{Three-stage authority allocator.} A common architecture is used in both channels (Section~\ref{sec:authority_allocation}): a safety-field sigmoid on $|F|$, the Swain--Rath Eq.~15 sigmoid on the normalized tracking-error index $\ell_n$, and adaptive EMA smoothing that accelerates during large errors and slows near equilibrium. The output $\lambda$ enters the Nash cost matrices through $\alpha = 1/(1+\lambda)$, following Pustilnik and Borrelli~\cite{pustilnikGeneralizedNashEquilibrium2025}.
 
-Fifth, the \textbf{Collision-Based Lateral Field} employs a two-threshold system that distinguishes ``safe, aware,'' and ``danger'' zones and elicits appropriate force responses.
+\textbf{Integration with Nash equilibrium control.} Section~\ref{sec:nash_integration} defined the coupling between the outer authority layer and the inner Nash solver. The coupling elements are: multi-rate scheduling at 50\,Hz for the physics loop, 10\,Hz for the longitudinal Nash step, and 20\,Hz for the lateral Nash step; pre-factored solver instances at a discrete $\lambda$ grid; adaptive $R_2$ that tracks synchronization, driver activity, and detected conflict; adaptive $Q_1$ that stiffens near lane boundaries in \textsc{Following}; online Intelligent Driver Model (IDM) calibration; warm-starting of both solvers throughout \textsc{Approach}; and channel-specific injection of the shared control into throttle/brake or normalized steering.
 
-Sixth, \textbf{Target Locking} ensures that merge targets are locked at trigger time to prevent target switching during maneuvers.
+The safety field and authority parameters used in both channels are listed in Table~\ref{tab:field_params_summary}. Dashes indicate parameters that are not defined for the corresponding channel. The phase-transition thresholds that govern the \textsc{Merge}~$\leftrightarrow$~\textsc{Following} state machine are listed in Table~\ref{tab:phase_transitions_summary}.
 
-\begin{table}[ht]
+\begin{table}[H]
 \centering
-\begin{tabular}{|l|c|c|}
+\caption{Safety field and authority parameters (longitudinal and lateral).}
+\label{tab:field_params_summary}
+\begin{tabular}{lcc}
 \hline
 \textbf{Parameter} & \textbf{Longitudinal} & \textbf{Lateral} \\
 \hline
-Base safety radius $s_{\text{base}}$ & 10 m & -- \\
-Base obstacle mass $M_{\text{base}}$ & 400 kg & -- \\
-Distance decay $\tau_d$ & 15 m & 20 m \\
-Filter coefficient $\alpha_f$ & 0.2 & 0.3 \\
-Force gain $K$ & -- & 150 N \\
-Max force & 800 N & 500 N \\
-Safe distance $d_{\text{safe}}$ & -- & 3.0 m \\
-Collision threshold $d_{\text{collision}}$ & -- & 2.0 m \\
-Follower weight $w_f$ & 0.2--0.5 & -- \\
+Base safety radius $s_{\mathrm{base}}$        & $10\,\mathrm{m}$   & --                     \\
+Base obstacle mass $M_{\mathrm{base}}$        & $400\,\mathrm{kg}$ & --                     \\
+Virtual mass base $m_0$                        & --                 & $1304\,\mathrm{kg}$    \\
+Elliptic scale $T_s$, $\tau$                   & --                 & $2.0\,\mathrm{s}$, $2.0\,\mathrm{m}$ \\
+Field constant $G$                             & --                 & $6 \times 10^{-3}$    \\
+Kinetic coefficients $K_1$, $K_2$              & --                 & $0.005$, $0.005$      \\
+Distance decay $\tau_d$                        & $15\,\mathrm{m}$   & --                     \\
+Direction smoothing $\sigma$                   & --                 & $0.5\,\mathrm{m}$      \\
+Driver risk addend $DR$                        & $0.5$              & $0.5$                  \\
+Follower weight $w_f$                          & $0.5$              & --                     \\
+TTC floor $T_{\mathrm{warn}}$, $T_{\mathrm{crit}}$ & $5.5\,\mathrm{s}$, $3.0\,\mathrm{s}$ & -- \\
+Fade threshold $\gamma_{\mathrm{merge}}$, $\gamma_{\mathrm{follow}}$ & $0.08$, $0.15$ & -- \\
+Boundary gain $K_b$                            & --                 & $150\,\mathrm{N}$      \\
+Boundary proximity $d_{\mathrm{prox}}$         & --                 & $3.0\,\mathrm{m}$      \\
+Maximum force                                  & $800\,\mathrm{N}$  & $2000\,\mathrm{N}$    \\
+EMA filter coefficient $\alpha_f$              & $0.2$              & $0.3$                  \\
+\hline
+Authority range $[\lambda_{\min}, \lambda_{\max}]$ & $[0.1, 100]$     & $[0.1, 10]$          \\
+Force midpoint $F_{\mathrm{mid}}$              & $400\,\mathrm{N}$  & $200\,\mathrm{N}$      \\
+Sigmoid steepness $k_s$                        & $0.015\,\mathrm{N}^{-1}$ & $0.025\,\mathrm{N}^{-1}$ \\
+Swain--Rath slope $M_1$, centre $M_2$          & $2.0$, $0.5$       & $2.0$, $0.5$           \\
+Error normalisation $e_{\mathrm{gap,max}}$, $e_{v,\mathrm{max}}$ & $5.0\,\mathrm{m}$, $1.5\,\mathrm{m/s}$ & -- \\
+EMA range $[\alpha_{\mathrm{base}}, \alpha_{\mathrm{fast}}]$ & $[0.05, 0.12]$ & $[0.02, 0.08]$ \\
 \hline
 \end{tabular}
-\caption*{\textbf{Phase Detection (Both Controllers)}}
 \end{table}
 
-\begin{table}[ht]
+
+In Table~\ref{tab:phase_transitions_summary}, the entry conditions must hold simultaneously for the stability hold time $T_{\mathrm{stable}}$ before the transition into \textsc{Following} is committed. Exit conditions trigger an immediate return to \textsc{Merge}, except for the longitudinal divergence exit, which requires a hold of $T_{\mathrm{hold}}$ to filter out transient gap fluctuations.
+\begin{table}[H]
 \centering
-\begin{tabular}{|l|c|c|}
+\caption{Phase transition thresholds (Merge~$\leftrightarrow$~  Following).}
+\label{tab:phase_transitions_summary}
+\begin{tabular}{lcc}
 \hline
-\textbf{Parameter} & \textbf{Longitudinal} & \textbf{Lateral} \\
+\textbf{Condition} & \textbf{Longitudinal} & \textbf{Lateral} \\
 \hline
-FOLLOWING entry (gap/y error) & 15\% & 15\% $\times W_{\text{lane}}$ \\
-FOLLOWING entry (velocity/$\psi$) & 5\% & 0.05 rad \\
-FOLLOWING exit (hysteresis) & 25\% / 10\% & 25\% / 0.10 rad \\
-Transition time $T_{\text{stable}}$ & 5 s & 5 s \\
+Entry: gap error $|e_{\mathrm{gap}}|/d_{\mathrm{des}}$  & $< 0.10$           & --                     \\
+Entry: velocity error $|v_{\mathrm{ego}} - v_{\mathrm{leader}}|$ & $< 0.5\,\mathrm{m/s}$ & --          \\
+Entry: gap convergence $|\dot{e}_{\mathrm{gap}}|$       & $< 0.3\,\mathrm{m/s}$ & --                  \\
+Entry: lateral offset $|y_{\mathrm{ego}} - y_{\mathrm{platoon}}|$ & --      & $< 0.3\,\mathrm{m}$    \\
+Entry: heading $|\psi|$                                 & --                 & $< 0.05\,\mathrm{rad}$ \\
+Stability hold time $T_{\mathrm{stable}}$               & $5.0\,\mathrm{s}$  & $5.0\,\mathrm{s}$      \\
+\hline
+Exit: gap error $|e_{\mathrm{gap}}|/d_{\mathrm{des}}$   & $> 0.35$           & --                     \\
+Exit: gap divergence rate $\dot{d}$                     & $> 0.5\,\mathrm{m/s}$ & --                 \\
+Exit: lateral offset                                    & --                 & $> W_{\mathrm{lane}}/4$ \\
+Exit: heading $|\psi|$                                  & --                 & $> 0.10\,\mathrm{rad}$ \\
+Longitudinal exit hold time $T_{\mathrm{hold}}$         & $3.0\,\mathrm{s}$  & --                     \\
 \hline
 \end{tabular}
-\caption{Summary of safety field parameters}
-\label{tab:safety_params_summary}
 \end{table}
+
+The safety field, the authority allocator, and the Nash integration described in this chapter jointly define a closed-loop shared-control layer that respects the physical constraints of the vehicle and the presence of a human driver. Chapter~4 develops the internal structure of the Nash equilibrium solver on which this layer depends.
+
 
 %--------------------------------------------------------------
 % CHAPTER 4: GAME-THEORETIC FRAMEWORK — CORRECTED VERSION V2
@@ -1976,7 +2303,7 @@ where $\bar{Q}_1 = \text{diag}(Q_1, \ldots, Q_1)$, $\bar{Q}_2 = \lambda \bar{Q}_
 
 % ===================================================================
 \section{Dynamic Authority Allocation}
-\label{sec:authority_allocation}
+\label{sec:authority_allocation_}
 % ===================================================================
 
 The authority ratio $\lambda[k]$ dynamically adjusts the balance between system and human control based on the assessed risk level. The longitudinal and lateral controllers use different authority allocation strategies reflecting their distinct operational requirements.
