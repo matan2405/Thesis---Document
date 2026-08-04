@@ -1027,100 +1027,180 @@ Chapter~4.
 %--------------------------------------------------------------
 \chapter{Safety Field Formulations}
 
-This chapter presents the mathematical framework for quantifying collision risk in both longitudinal and lateral directions. The safety field approach provides continuous risk measures that integrate seamlessly with the Nash equilibrium control framework through dynamic authority allocation. A key innovation in this work is the \textbf{dynamic phase detection system} that distinguishes between active merging and steady-state following phases, enabling context-appropriate control responses.
+This chapter develops the mathematical framework for quantifying collision risk in both the longitudinal and lateral directions. Both directions rest on a shared theoretical foundation: the \textit{driving safety field} (DSF) introduced by Wang et al.~\cite{wangDrivingSafetyField2015, wangDrivingSafetyField2016} and extended to elliptic obstacle representations by Li et al.~\cite{liSharedControlNovel2019}. The longitudinal field applies an elliptic potential to regulate the gap between the ego vehicle and its platoon neighbours; the lateral field applies the full Wang--Li formulation to all platoon members visible in the adjacent lane, generating repulsive forces that prevent lateral collisions during lane change. Both fields supply a common authority allocation mechanism (Section~\ref{sec:authority}) that determines the degree to which the automated system overrides the human driver within the Nash equilibrium framework. The implementation also introduces a dynamic phase detection system that adapts both fields to the current operating context, distinguishing active merging from steady-state following in the longitudinal direction and a five-phase lane-change sequence in the lateral direction.
 
-Section 3.1 introduces the theoretical foundation of driving safety field theory. Section 3.2 describes the bidirectional longitudinal safety field with phase detection. Section 3.3 presents the collision-based lateral safety field. Section 3.4 discusses integration with the Nash control framework.
+Section~\ref{sec:dsf_theory} introduces the theoretical foundation of driving safety field theory. Section~\ref{sec:longitudinal_field} describes the bidirectional longitudinal safety field with phase detection. Section~\ref{sec:lateral_field} presents the Wang--Li lateral safety field. Section~\ref{sec:authority} details integration with the Nash control framework.
 
-\section{Driving Safety Field Theory - Overview}
 
-The Driving Safety Field theory \cite{wang_driving_2015, wang_driving_2016} extends potential field methods from robotics to automotive applications, representing collision risk as a continuous field. Following Li et al. \cite{li_shared_2019}, the total driving safety field comprises three components as shown in Equation \ref{eq:total_safety_field}:
+\section{Driving Safety Field Theory}
+\label{sec:dsf_theory}
+
+The driving safety field (DSF) framework, introduced by Wang et al.~\cite{wangDrivingSafetyField2015, wangDrivingSafetyField2016}, extends classical potential field methods from robotics to multi-vehicle traffic environments by representing collision risk as a continuous scalar field over the road plane. Following Li et al.~\cite{liSharedControlNovel2019}, the total field decomposes into three additive components:
 
 \begin{equation}
 \mathbf{E}_s = \mathbf{E}_p + \mathbf{E}_k + \mathbf{E}_b
 \label{eq:total_safety_field}
 \end{equation}
 
-where $\mathbf{E}_p$ is the potential field representing static obstacles, $\mathbf{E}_k$ is the kinetic field representing moving vehicles, and $\mathbf{E}_b$ is the behavior field capturing driver characteristics. In platoon-merging applications, the kinetic field dominates the total field.
+where $\mathbf{E}_p$ captures static obstacles through a position-dependent potential, $\mathbf{E}_k$ represents the kinetic interaction between moving vehicles, and $\mathbf{E}_b$ encodes driver behavioural characteristics. In platoon-merging scenarios the kinetic component $\mathbf{E}_k$ dominates: all vehicles travel at highway speed, so collision risk arises primarily from closing velocities rather than from stationary obstacles.
 
-The field strength translates to a control force according to:
+The field strength at a given position produces a longitudinal or lateral control force according to~\cite{wangDrivingSafetyField2016}:
 
 \begin{equation}
-\mathbf{F}_{fi} = E_{si} M_i R_i \exp(-k_2 v_i \cos \theta_i) (1 + DR_i)
+\mathbf{F}_{fi} = E_{si} \, M_i \, R_i \, \exp\!\left(-k_2 \, v_i \cos\theta_i\right)\left(1 + DR_i\right)
 \label{eq:field_force}
 \end{equation}
 
-where $M_i$ is vehicle virtual mass, $R_i$ is the road condition factor, $v_i$ is velocity, and $DR_i$ is the driver risk factor.
-
-\subsection{Design Philosophy: Pure Repulsive Forces}
-
-A fundamental design decision in this implementation is the use of \textbf{pure repulsive forces}. Unlike classical potential field methods that employ both attractive and repulsive components, our safety field generates force only when actual collision risk exists:
+where $M_i$ is the virtual mass of vehicle $i$, $R_i$ is a road-condition factor, $v_i$ is its speed, $\theta_i$ is the angle between the vehicle's velocity vector and the field gradient direction, and $DR_i$ is a driver-risk factor that scales the overall force with the assessed riskiness of the driver's behaviour. The virtual mass depends non-linearly on vehicle speed~\cite{wangDrivingSafetyField2016}:
 
 \begin{equation}
-F_{\text{safety}}(d) = \begin{cases}
-f(d) > 0 & \text{if } d < d_{\text{safe}} \text{ (danger zone)} \\
-0 & \text{if } d \geq d_{\text{safe}} \text{ (safe zone)}
-\end{cases}
-\label{eq:pure_repulsive}
+M_i = m_0 \left( c_s \, |v_i|^{c_e} + c_o \right)
+\label{eq:virtual_mass}
 \end{equation}
 
-This approach offers several advantages. First, the Nash equilibrium solver handles trajectory tracking without interference from the safety system when no danger exists. Second, there is a clear separation of concerns, with Nash providing optimal tracking while the safety field prevents collisions. Third, reduced oscillations are observed compared with systems with competing attractive forces. Fourth, computational efficiency is achieved through sparse force calculations.
+where $m_0 = 1304\,\mathrm{kg}$ is the physical vehicle mass and the coefficients $c_s = 1.566 \times 10^{-14}$, $c_e = 6.687$, and $c_o = 0.3345$ were calibrated from accident statistics~\cite{wangDrivingSafetyField2016}.
+
+Li et al.~\cite{liSharedControlNovel2019} extended the Wang framework to non-circular obstacle representations by replacing the Euclidean distance with an elliptic distance measure that accounts for the asymmetry between the longitudinal and lateral extents of the safety envelope. The field strength around a single obstacle becomes:
+
+\begin{equation}
+E = \frac{G \, R_{\mathrm{obs}} \, M_{\mathrm{obs}}}{r^*} \, \exp\!\left(k_1 \, v_{\mathrm{obs}} \cos\theta_v\right)
+\label{eq:li_field_strength}
+\end{equation}
+
+where $G = 6 \times 10^{-3}$ is a scaling constant, $R_{\mathrm{obs}}$ is the road-condition factor of the obstacle vehicle, and the kinetic correction term $\exp(k_1 v_{\mathrm{obs}} \cos\theta_v)$ amplifies the field strength when the obstacle moves toward the ego vehicle. The elliptic distance $r^*$ is defined as:
+
+\begin{equation}
+r^* = \sqrt{\left(\frac{d_x}{a}\right)^2 + \left(\frac{d_y}{b}\right)^2}
+\label{eq:elliptic_distance}
+\end{equation}
+
+where $d_x$ and $d_y$ are the longitudinal and lateral separations between the ego and obstacle vehicles, and the semi-axes $a = \max(|\Delta v| \cdot T_s,\, a_{\min})$ and $b = \tau$ adapt to relative velocity, preventing the field from collapsing to zero when the vehicles share the same longitudinal position. The parameters $T_s = 2.0\,\mathrm{s}$, $a_{\min} = 2.0\,\mathrm{m}$, and $\tau = 2.0\,\mathrm{m}$ are fixed. The resultant force on the ego vehicle is~\cite{liSharedControlNovel2019}:
+
+\begin{equation}
+F_r = E \, M_{\mathrm{ego}} \, R_{\mathrm{ego}} \, \exp\!\left(-k_2 \, v_{\mathrm{ego}} \cos\theta_i\right)\left(1 + DR\right)
+\label{eq:li_force}
+\end{equation}
+
+The Wang speed-dependent virtual mass and the Li elliptic distance are combined throughout the implementation. The longitudinal safety field applies the elliptic potential to quantify risk from the leader and follower vehicles; the lateral safety field applies the full Wang--Li formulation to all platoon members in the adjacent lane. Sections~\ref{sec:longitudinal_field} and~\ref{sec:lateral_field} detail each direction separately.
+
+\subsection{Design Philosophy: Bidirectional Forces with Hard Safety Zones}
+
+One design choice differentiates this implementation from standard potential field methods: the longitudinal field is \textit{bidirectional}, generating a repulsive force when the ego vehicle is too close to the leader and an attractive force when it has fallen too far behind. A separate gap-closing controller is therefore unnecessary; the Nash equilibrium solver tracks a single combined reference determined entirely by the safety field.
+
+The bidirectional force is bounded by two hard safety zones derived from a time-headway rule~\cite{wangDrivingSafetyField2016}:
+
+\begin{align}
+d_{\min}(v) &= \max\!\left(d_{\mathrm{floor}},\, h_{\min} \cdot v\right) \label{eq:min_safe} \\
+d_{\mathrm{emg}}(v) &= d_{\min}(v) + \Delta_{\mathrm{emg}} \label{eq:emg_dist}
+\end{align}
+
+where $d_{\mathrm{floor}} = 5.0\,\mathrm{m}$ is a standstill floor, $h_{\min} = 1.0\,\mathrm{s}$ is the minimum time headway, and $\Delta_{\mathrm{emg}} = 1.0\,\mathrm{m}$ is the emergency offset. When the bumper-to-bumper gap falls below $d_{\min}$, the force saturates to its maximum value $F_{\max} = 800\,\mathrm{N}$. Between $d_{\min}$ and $d_{\mathrm{emg}}$, the force ramps linearly from $F_{\max}$ to the elliptic potential value, ensuring a continuous transition into the danger zone. Under these conditions the authority allocator (Section~\ref{sec:authority}) receives a saturated signal, driving $\lambda \to \lambda_{\max}$ and transferring full longitudinal control to the automated system.
 
 \section{Bidirectional Longitudinal Safety Field}
+\label{sec:longitudinal_field}
 
 \subsection{Overview and Architecture}
 
-The longitudinal safety field addresses the unique challenge of platoon merging, where the ego vehicle faces threats from both the leader vehicle ahead and the follower vehicle behind. The implementation uses a \textbf{pure repulsive} approach where forces are generated only when the gap to a neighboring vehicle falls below the desired safe distance.
+The longitudinal safety field quantifies collision risk from two directions simultaneously: the leader vehicle ahead and the follower vehicle behind. During platoon merging, the ego vehicle must close a large gap to the platoon leader while avoiding a collision with a following vehicle that may be decelerating into the same space. Both constraints must be satisfied concurrently, and the bidirectional formulation addresses this directly.
 
-The core principle follows the gap error formulation:
+The field is evaluated over the full merge trajectory and yields a signed scalar force $F_{\mathrm{total}}$ that is passed directly to the authority allocator. The sign convention is: $F > 0$ is repulsive (ego is too close — decelerate); $F < 0$ is attractive (ego has fallen too far behind — accelerate). The desired bumper-to-bumper gap follows a constant time-gap policy~\cite{rajamaniVehicleDynamicsControl2005}:
+
 \begin{equation}
-e_{\text{gap}} = d_{\text{actual}} - d_{\text{desired}}
+d_{\mathrm{des}}(v) = d_s + h \cdot v
+\label{eq:desired_gap}
+\end{equation}
+
+where $d_s = 2.0\,\mathrm{m}$ is the standstill distance, $h = 1.5\,\mathrm{s}$ is the time gap, and $v$ is the ego vehicle speed. The gap error with respect to the leader is:
+
+\begin{equation}
+e_{\mathrm{gap}} = d_{\mathrm{des}}(v) - d_{\mathrm{actual}}
 \label{eq:gap_error}
 \end{equation}
 
-where $d_{\text{actual}}$ is the current inter-vehicle gap and $d_{\text{desired}}$ is the target following distance. When $e_{\text{gap}} > 0$, the vehicle is safe and no repulsive force is generated. When $e_{\text{gap}} < 0$, the vehicle is too close, and the repulsive force increases.
+so that $e_{\mathrm{gap}} > 0$ indicates the ego is too close (danger) and $e_{\mathrm{gap}} < 0$ indicates the ego has more space than required (safe, attractive regime).
 
 \subsection{Force Computation Model}
+\label{sec:long_force}
 
-The repulsive force from the leader vehicle is computed using an ellipse-based potential field inspired by Li et al. \cite{li_shared_2019}:
+The leader force is computed through four regimes, ordered by proximity severity.
+
+\subsubsection{Hard Safety Zones}
+
+When the gap falls below the velocity-dependent minimum safe distance $d_{\min}(v)$ defined in Equation~\ref{eq:min_safe}, the force is saturated immediately:
 
 \begin{equation}
-F_{\text{leader}} = \frac{M_o \cdot R_i}{(r_e + \epsilon)^2} \cdot w_d \cdot w_v \cdot (1 + DR_i)
-\label{eq:leader_force_impl}
+F_{\mathrm{leader}} = \begin{cases}
+F_{\max} & d < d_{\min}(v) \\[4pt]
+\left(1 - \dfrac{d - d_{\min}(v)}{d_{\mathrm{emg}}(v) - d_{\min}(v)}\right) F_{\max} & d_{\min}(v) \leq d < d_{\mathrm{emg}}(v)
+\end{cases}
+\label{eq:hard_zones}
 \end{equation}
 
-where the components are defined as follows.
+where $F_{\max} = 800\,\mathrm{N}$. The linear ramp between $d_{\min}$ and $d_{\mathrm{emg}}$ keeps the transition into full saturation continuous. The EMA filter that normally smooths the force output is bypassed in the emergency zone, so that filter lag cannot attenuate the signal on the first timestep of a dangerous approach.
 
-\textbf{Elliptic distance ratio:}
+\subsubsection{Elliptic Potential (Li et al.)}
+
+When the gap exceeds $d_{\mathrm{emg}}$ and the gap error is positive ($e_{\mathrm{gap}} > 0$, ego too close relative to desired), the force is computed from the elliptic \textit{driving safety field} potential~\cite{liSharedControlNovel2019}:
+
 \begin{equation}
-r_e = \frac{|e_{\text{gap}}|}{s + \epsilon}
+F_{\mathrm{elliptic}} = \frac{M_o \cdot R_i}{\left(r_e + \varepsilon\right)^2} \cdot w_d \cdot w_v \cdot \left(1 + DR\right)
+\label{eq:elliptic_force}
+\end{equation}
+
+where the elliptic ratio is:
+\begin{equation}
+r_e = \frac{e_{\mathrm{gap}}}{s + \varepsilon}
 \label{eq:elliptic_ratio}
 \end{equation}
 
-where $s$ is the dynamic safety radius and $\epsilon = 0.1$ m prevents singularities.
-
-\textbf{Distance decay weight:}
+with $\varepsilon = 0.1\,\mathrm{m}$ preventing singularities when $e_{\mathrm{gap}} \to 0$. The distance decay weight is:
 \begin{equation}
-w_d = \exp\left(-\frac{|e_{\text{gap}}|}{\tau_d}\right)
-\label{eq:distance_decay}
+w_d = \exp\!\left(-\frac{e_{\mathrm{gap}}}{\tau_d}\right), \quad \tau_d = 15\,\mathrm{m}
+\label{eq:dist_decay}
 \end{equation}
 
-with decay factor $\tau_d = 15$ m, ensuring the force diminishes smoothly with distance.
-
-\textbf{Velocity-dependent weight:}
+and the closing-velocity weight is:
 \begin{equation}
-w_v = \exp\left(\frac{\max(0, v_{\text{rel}})}{5.0}\right)
-\label{eq:velocity_weight}
+w_v = \exp\!\left(\frac{\max(0,\, v_{\mathrm{rel}})}{5.0}\right), \quad v_{\mathrm{rel}} = v_{\mathrm{ego}} - v_{\mathrm{leader}}
+\label{eq:vel_weight}
 \end{equation}
 
-where $v_{\text{rel}} = v_{\text{ego}} - v_{\text{leader}}$ is the closing velocity. This term amplifies the force experienced when approaching the leader at a positive relative velocity.
+so that the force is amplified when the ego approaches the leader ($v_{\mathrm{rel}} > 0$) and remains unchanged when the gap is growing.
 
-\textbf{Behavior factor:}
+\subsubsection{TTC Floor}
+
+A time-to-collision (TTC) floor ensures the elliptic potential does not underestimate risk at mid-range gaps where $r_e$ is small but the closing speed is high. When $v_{\mathrm{rel}} > 0.1\,\mathrm{m/s}$:
+
 \begin{equation}
-w_b = 1 + DR_i
-\label{eq:behavior_factor}
+\mathrm{TTC} = \frac{d}{v_{\mathrm{rel}}}
+\label{eq:ttc}
 \end{equation}
 
-where $DR_i$ is the dynamic driving risk factor with baseline value 0.5.
+The TTC floor force ramps linearly from zero at $\mathrm{TTC} = T_{\mathrm{warn}} = 5.5\,\mathrm{s}$ to $F_{\max}$ at $\mathrm{TTC} = T_{\mathrm{crit}} = 3.0\,\mathrm{s}$:
+
+\begin{equation}
+F_{\mathrm{TTC}} = \left(1 - \frac{\mathrm{TTC} - T_{\mathrm{crit}}}{T_{\mathrm{warn}} - T_{\mathrm{crit}}}\right)_{\!+} F_{\max}
+\label{eq:ttc_floor}
+\end{equation}
+
+where $(\cdot)_+$ denotes clamping to $[0, 1]$. The final repulsive force takes the larger of the two signals, capped at $F_{\max}$:
+
+\begin{equation}
+F_{\mathrm{leader}}^{+} = \min\!\left(\max\!\left(F_{\mathrm{elliptic}},\, F_{\mathrm{TTC}}\right),\, F_{\max}\right)
+\label{eq:leader_repulsive}
+\end{equation}
+
+\subsubsection{Attractive Regime}
+
+When $e_{\mathrm{gap}} \leq 0$ (gap exceeds the desired value), a linear attractive force pulls the ego vehicle forward:
+
+\begin{equation}
+F_{\mathrm{leader}}^{-} = \mathrm{clip}\!\left(\frac{e_{\mathrm{gap}}}{d_{\mathrm{des}}} \cdot F_{\max},\; -0.25\,F_{\max},\; 0\right)
+\label{eq:attractive_force}
+\end{equation}
+
+The cap at $-0.25\,F_{\max} = -200\,\mathrm{N}$ prevents excessive acceleration when the ego is far behind the platoon; in that regime, the Nash reference generator serves as the primary catch-up mechanism.
+
 
 \subsection{Dynamic Parameter Computation}
 
@@ -1308,133 +1388,187 @@ Algorithm \ref{alg:longitudinal_field_impl} summarizes the complete longitudinal
 \end{algorithmic}
 \end{algorithm}
 
-\section{Collision-Based Lateral Safety Field}
+\section{Elliptic Lateral Safety Field}
+\label{sec:lateral_field}
 
 \subsection{Design Philosophy}
 
-The lateral safety field addresses collision avoidance during lane change maneuvers. A critical design insight distinguishes this implementation from the longitudinal field.
+The lateral safety field quantifies collision risk from neighboring platoon vehicles during a lane-change maneuver. A fundamental distinction separates this field from its longitudinal counterpart. In longitudinal control, reducing the gap to the leader is \textit{dangerous}; in lateral control, closing the gap to the target lane is \textit{desired behavior}. The lateral field therefore generates repulsive force only from genuine proximity to other vehicles, not from progress toward the target lane. This separation allows the Nash equilibrium to govern the lane-change trajectory without safety-field interference, with repulsive forces activated only when a real collision threat arises.
 
-\textbf{Key Difference:} In longitudinal control, approaching the leader (reducing the gap) is dangerous. In lateral control, approaching the target lane is \textit{desired behavior}, not danger. Therefore, the lateral safety field generates force only from \textit{actual proximity to other vehicles}, not from approaching the target lane.
-
-This collision-based approach ensures that the Nash equilibrium can freely control the lane change trajectory, that safety intervention occurs only when collision risk is genuine, and that there is no interference with normal lane change execution.
+The formulation follows Wang and Li~\cite{wangDrivingSafetyField2015,wangDrivingSafetyField2016,liSharedControlNovel2019}, computing a continuous potential field over the two-dimensional plane. The virtual-mass and elliptic-distance framework from the longitudinal field is retained here, with parameters tuned for lateral dynamics.
 
 \subsection{Control Phases for Lateral Motion}
+\label{sec:lat_phases}
 
-The lateral controller uses a five-phase state machine. The \textbf{CRUISE} phase represents normal lane keeping while waiting for the merge command. The \textbf{GAP\_SEARCH} phase involves searching for a suitable gap in the target lane. The \textbf{LANE\_CHANGE} phase is the active lane change execution. The \textbf{LANE\_KEEPING} phase involves stabilizing in the target lane. Finally, the \textbf{FOLLOWING} phase represents steady-state lateral control.
+The lateral controller advances through four phases that map directly to the \texttt{NashCoordinator} state machine: \textsc{Approach}, \textsc{GapSearch}, \textsc{Merge}, and \textsc{Following}.
 
-Phase transitions follow similar logic to longitudinal control, with conditions adapted for lateral dynamics.
+During \textsc{Approach}, the ego vehicle remains in its current lane while the coordinator waits for a merge command. In \textsc{GapSearch}, available gaps in the target lane are evaluated, and an insertion point is selected. During \textsc{Merge}, the active lane change is executed under Nash shared control. \textsc{Following} is the steady-state phase, entered once the vehicle has settled in the target lane.
 
-\textbf{Entry to FOLLOWING:}
+\textbf{Entry to \textsc{Following}.} The transition from \textsc{Merge} to \textsc{Following} requires all five conditions in Equations~\ref{eq:lat_following_y}--\ref{eq:lat_conv_cond} to hold simultaneously for a continuous period $T_{\mathrm{stable}} = 5.0\,\mathrm{s}$:
+
 \begin{align}
-|y_{\text{error}}| &< \gamma_y \cdot W_{\text{lane}} \label{eq:lat_following_y} \\
-|\psi| &< \psi_{\text{threshold}} \label{eq:lat_following_psi} \\
-|\dot{y}| &< \dot{y}_{\text{threshold}} \label{eq:lat_following_ydot}
+|y_{\mathrm{ego}} - y_{\mathrm{platoon}}| &< 0.3\,\mathrm{m} \label{eq:lat_following_y} \\
+|\psi| &< 0.05\,\mathrm{rad} \label{eq:lat_following_psi} \\
+\frac{|e_{\mathrm{gap}}|}{d_{\mathrm{des}}} &< \gamma_{\mathrm{gap}} = 0.10 \label{eq:lat_following_gap} \\
+|v_{\mathrm{ego}} - v_{\mathrm{leader}}| &< \delta_v = 0.5\,\mathrm{m/s} \label{eq:lat_following_vel} \\
+\left|\dot{e}_{\mathrm{gap}}\right| &< \dot{e}_{\mathrm{max}} = 0.3\,\mathrm{m/s} \label{eq:lat_conv_cond}
 \end{align}
 
-where $\gamma_y = 0.15$, $W_{\text{lane}} = 3.5$ m, $\psi_{\text{threshold}} = 0.05$ rad (approximately $\SI{3}{\degree}$), and $\dot{y}_{\text{threshold}} = 0.3$ m/s, all sustained for 5 seconds.
+where Equation~\ref{eq:lat_following_y} confirms lateral alignment with the platoon lane, Equation~\ref{eq:lat_following_psi} confirms heading alignment, Equations~\ref{eq:lat_following_gap}--\ref{eq:lat_following_vel} confirm longitudinal convergence and velocity synchronization, and Equation~\ref{eq:lat_conv_cond} confirms the gap is no longer drifting.
 
-\textbf{Exit from FOLLOWING:}
-\begin{align}
-|y_{\text{error}}| &> 0.25 \cdot W_{\text{lane}} \quad \text{OR} \label{eq:lat_merging_y} \\
-|\psi| &> 0.10 \text{ rad} \label{eq:lat_merging_psi}
-\end{align}
-
-\subsection{Collision Detection and Force Computation}
-
-The lateral safety field uses a two-threshold system for collision detection:
-
+\textbf{Exit from \textsc{Following}.} The system returns to \textsc{Merge} immediately upon a lateral exceedance:
 \begin{equation}
-\text{Collision Risk} = \begin{cases}
-\text{None} & |d_y| > d_{\text{safe}} \\
-\text{Low} & d_{\text{collision}} < |d_y| \leq d_{\text{safe}} \\
-\text{High} & |d_y| \leq d_{\text{collision}}
-\end{cases}
-\label{eq:collision_zones}
+|y_{\mathrm{ego}} - y_{\mathrm{platoon}}| > \tfrac{1}{4}\,W_{\mathrm{lane}}
+\label{eq:lat_exit_y}
 \end{equation}
 
-where $d_y$ is the lateral distance to the obstacle, $d_{\text{safe}} = 3.0$ m, and $d_{\text{collision}} = 2.0$ m.
-
-\subsubsection{No Risk Zone ($|d_y| > d_{\text{safe}}$)}
-
-When the lateral distance exceeds the safe threshold, no force is generated:
+where $y_{\mathrm{ego}}$ is the lateral position of the ego vehicle, $y_{\mathrm{platoon}}$ is the lateral center of the platoon lane, and $W_{\mathrm{lane}}$ is the lane width. A sustained heading deviation also triggers the return:
 \begin{equation}
-F_{\text{obstacle}} = 0
-\label{eq:no_risk_force}
+|\psi| > 0.10\,\mathrm{rad}
+\label{eq:lat_exit_psi}
 \end{equation}
 
-This is the key feature enabling Nash to control the trajectory without interference.
+where $\psi$ is the yaw angle of the ego vehicle relative to the road centreline.
 
-\subsubsection{Low Risk Zone ($d_{\text{collision}} < |d_y| \leq d_{\text{safe}}$)}
+\subsection{Virtual Mass Formulation}
+\label{sec:lat_virtual_mass}
 
-Minimal exponentially-decaying force provides gentle awareness:
-\begin{equation}
-F_{\text{obstacle}} = 0.1 \cdot K_{\text{obs}} \cdot \exp\left(-\frac{|d_y|}{\tau_d}\right) \cdot \text{sign}(d_y)
-\label{eq:low_risk_force}
-\end{equation}
-
-where $K_{\text{obs}} = 150$ N and $\tau_d = 20$ m.
-
-\subsubsection{High Risk Zone ($|d_y| \leq d_{\text{collision}}$)}
-
-When collision risk is high, force scales with danger level:
+The virtual mass of each vehicle follows Wang~\cite{wangDrivingSafetyField2016} Eq.\,17 and depends on longitudinal speed:
 
 \begin{equation}
-\eta_{\text{danger}} = \min\left(2.0, \frac{d_{\text{collision}} - |d_y|}{d_{\text{collision}}}\right)
-\label{eq:danger_level}
+M_i(v_i) = m_0 \bigl(c_s\,|v_i|^{c_e} + c_o\bigr)
+\label{eq:lat_virtual_mass}
 \end{equation}
 
-Longitudinal overlap is considered:
+where $m_0 = 1304\,\mathrm{kg}$ is the vehicle physical mass, $c_s = 1.566 \times 10^{-14}$ and $c_e = 6.687$ are the speed-scaling coefficients, and $c_o = 0.3345$ is the offset ensuring a non-zero mass at rest. The same formula applies to both the ego vehicle ($M_{\mathrm{ego}}$) and each platoon obstacle ($M_{\mathrm{obs}}$). At highway cruising speed the virtual mass exceeds the physical mass, amplifying the perceived inertia and tightening the repulsive field.
+
+\subsection{Elliptic Field Strength}
+\label{sec:lat_elliptic}
+
+The two-dimensional separation between the ego vehicle and each obstacle is decomposed into a longitudinal component $d_x$ and a lateral component $d_y$:
 \begin{equation}
-\eta_{\text{overlap}} = \begin{cases}
-1.5 & |d_x| < d_{x,\text{threshold}} \text{ (direct overlap)} \\
-\max(0.3, 1 - \frac{|d_x| - d_{x,\text{threshold}}}{d_{x,\text{threshold}}}) & \text{otherwise}
-\end{cases}
-\label{eq:overlap_factor}
+d_x = x_{\mathrm{ego}} - x_{\mathrm{obs}}, \qquad d_y = y_{\mathrm{ego}} - y_{\mathrm{obs}}
+\label{eq:lat_separation}
 \end{equation}
 
-where $d_{x,\text{threshold}} = 10$ m.
+where $x_{\mathrm{ego}}$ and $y_{\mathrm{ego}}$ are the longitudinal and lateral positions of the ego vehicle, $x_{\mathrm{obs}}$ and $y_{\mathrm{obs}}$ are the corresponding positions of the obstacle, and $d_y > 0$ indicates that the ego is to the left of the obstacle. An elliptic metric weights the two components according to the velocity difference and a fixed lateral scale~\cite{liSharedControlNovel2019} (Eqs.\,12--13):
 
-The total obstacle force uses smooth saturation:
 \begin{equation}
-F_{\text{obstacle}} = K_{\text{obs}} \cdot \tanh\left(\frac{\eta_{\text{danger}} \cdot \eta_{\text{overlap}} \cdot K_{\text{obs}}}{K_{\text{scale}}}\right) \cdot \text{sign}(d_y)
-\label{eq:high_risk_force}
+r^{*} = \sqrt{\left(\frac{d_x}{a}\right)^{\!2} + \left(\frac{d_y}{b}\right)^{\!2}}
+\label{eq:lat_elliptic_dist}
 \end{equation}
 
-where $K_{\text{scale}} = 5.0$ determines the saturation rate.
+\begin{equation}
+a = \max\!\bigl(|\Delta v|\,T_s,\; a_{\min}\bigr), \qquad b = \tau
+\label{eq:lat_elliptic_axes}
+\end{equation}
+
+where $\Delta v = v_{\mathrm{ego}} - v_{\mathrm{obs}}$ is the relative longitudinal speed, $T_s = 2.0\,\mathrm{s}$ is the reaction-time scale, $a_{\min} = 2.0\,\mathrm{m}$ prevents the longitudinal axis from collapsing when both vehicles travel at the same speed, and $b = \tau = 2.0\,\mathrm{m}$ is the fixed lateral axis. At speed differentials below $1.0\,\mathrm{m/s}$, both axes equal $2.0\,\mathrm{m}$, making the field locally isotropic.
+
+The scalar field strength~\cite{liSharedControlNovel2019} (Eq.\,11) is:
+
+\begin{equation}
+E = G \cdot R_{\mathrm{obs}} \cdot \frac{M_{\mathrm{obs}}}{r^{*}}
+\label{eq:lat_field_strength}
+\end{equation}
+
+where $G = 6 \times 10^{-3}$ is the gravitational-analogue constant and $R_{\mathrm{obs}}$ is the road-condition factor for the obstacle vehicle.
+
+\subsection{Kinetic Corrections}
+\label{sec:lat_kinetic}
+
+Two kinetic corrections account for the velocities of the obstacle and the ego vehicle relative to the field gradient direction~\cite{liSharedControlNovel2019}.
+
+\subsubsection{Obstacle Kinetic Correction (Li Eq.~18)}
+
+The obstacle's longitudinal velocity is projected onto the elliptic gradient unit vector $\hat{\mathbf{u}}_{r^*}$. For a vehicle moving in the positive-$x$ direction, the unit velocity vector is $[1, 0]^{\top}$, so the projection reduces to the $x$-component of $\hat{\mathbf{u}}_{r^*}$:
+
+\begin{equation}
+\cos\theta_v = \hat{u}_{r^*,x} = \frac{d_x / a}{r^{*}}
+\label{eq:lat_cos_theta_v}
+\end{equation}
+
+where $\hat{u}_{r^*,x}$ is the $x$-component of the normalized gradient vector and $\theta_v$ is the angle between the obstacle velocity and the gradient direction.
+
+\begin{equation}
+E \;\leftarrow\; E \cdot \exp\!\bigl(K_1\,|v_{\mathrm{obs}}|\,\cos\theta_v\bigr), \qquad K_1 = 0.005
+\label{eq:lat_obs_kinetic}
+\end{equation}
+
+where $K_1$ is the obstacle kinetic coefficient. This update amplifies the field when the obstacle moves toward the ego along the gradient and attenuates it when the obstacle moves away.
+
+\subsubsection{Ego Kinetic Correction (Li Eq.~21)}
+
+The ego vehicle's velocity is projected onto the unnormalized elliptic gradient $\nabla(r^{*2})$ to form $\cos\theta_i$:
+
+\begin{equation}
+\cos\theta_i = \frac{d_x / a^2}{\left\|(d_x / a^2,\; d_y / b^2)\right\|}
+\label{eq:lat_cos_theta_i}
+\end{equation}
+
+where $\theta_i$ is the angle between the ego velocity and the elliptic gradient, and the denominator is the Euclidean norm of the unnormalized gradient vector. The repulsive force magnitude is then:
+
+\begin{equation}
+F_r = E \cdot M_{\mathrm{ego}} \cdot R_{\mathrm{ego}} \cdot \exp\!\bigl(-K_2\,|v_{\mathrm{ego}}|\,\cos\theta_i\bigr) \cdot (1 + DR)
+\label{eq:lat_force_mag}
+\end{equation}
+
+where $K_2 = 0.005$ is the ego kinetic coefficient, $R_{\mathrm{ego}}$ is the road-condition factor for the ego vehicle, and $DR = 0.5$ is the dynamic risk addend that sustains a non-zero floor even when kinetic corrections are near unity.
+
+\subsection{Lateral Direction Convention}
+\label{sec:lat_direction}
+
+Equation~\ref{eq:lat_force_mag} gives only the magnitude of the repulsive force. The lateral direction is assigned through a smooth hyperbolic tangent of the lateral separation:
+
+\begin{equation}
+F_{\mathrm{lat}} = F_r \cdot \tanh\!\left(\frac{d_y}{\sigma}\right), \qquad \sigma = 0.5\,\mathrm{m}
+\label{eq:lat_direction}
+\end{equation}
+
+where $\sigma$ is the lateral sharpness parameter governing the transition width around $d_y = 0$. When $d_y = 0$ (ego directly ahead of or behind the obstacle), the force is exactly zero: no lateral bias is introduced. When $|d_y| \gg \sigma$, the $\tanh$ saturates to $\pm 1$ and the full magnitude $F_r$ is applied. This continuously differentiable sign function avoids the discontinuity that a hard $\mathrm{sign}(\cdot)$ would introduce at $d_y = 0$.
 
 \subsection{Road Boundary Forces}
+\label{sec:lat_boundaries}
 
-Repulsive forces prevent the vehicle from leaving the road:
-
-\begin{equation}
-F_{\text{boundary}} = K_b \cdot \tanh\left(\frac{1/d_{\text{boundary}}}{K_{b,\text{scale}}}\right) \cdot \text{sign}(\text{push direction})
-\label{eq:boundary_force}
-\end{equation}
-
-where $d_{\text{boundary}}$ is distance to road edge, $K_b = 150$ N, and $K_{b,\text{scale}} = 2.0$. Boundary forces activate when $d_{\text{boundary}} < 3.0$ m.
-
-\subsection{Total Lateral Force}
-
-The complete lateral safety force combines obstacle and boundary contributions:
+Lane-boundary forces prevent the ego vehicle from leaving the road. These act alongside the vehicle-to-vehicle repulsion described above. The lateral position $y_{\mathrm{ego}}$ defines distances to the right and left edges:
 
 \begin{equation}
-F_{\text{lateral}} = \sum_{i=1}^{N_{\text{obs}}} F_{\text{obstacle},i} + F_{\text{boundary}}
-\label{eq:total_lateral}
+d_{\mathrm{right}} = W_{\mathrm{road}}/2 - y_{\mathrm{ego}}, \qquad d_{\mathrm{left}} = W_{\mathrm{road}}/2 + y_{\mathrm{ego}}
+\label{eq:lat_boundary_dists}
 \end{equation}
 
-In the FOLLOWING phase, a soft transition is applied:
+where $W_{\mathrm{road}}$ is the total road width and $y_{\mathrm{ego}}$ is measured from the road centreline. A repulsive potential is activated when either distance falls below the proximity threshold $d_{\mathrm{prox}} = 3.0\,\mathrm{m}$:
+
 \begin{equation}
-F_{\text{final}} = F_{\text{lateral}} \cdot \min\left(1.0, \left(\frac{|y_{\text{error}}|}{\gamma_y \cdot W_{\text{lane}}}\right)^2\right)
-\label{eq:lateral_soft_transition}
+F_{\mathrm{boundary},k} = \pm\, K_b \cdot \tanh\!\left(\frac{1}{\max(d_k,\,\varepsilon_b)\,K_{b,s}}\right)
+\label{eq:lat_boundary_force}
 \end{equation}
 
-Output filtering ensures smooth commands:
+where $K_b = 150\,\mathrm{N}$ is the boundary gain, $K_{b,s} = 2.0$ is the saturation scale, $\varepsilon_b = 0.1\,\mathrm{m}$ is a lower-bound clamp on $d_k$ that prevents division by zero as the vehicle approaches the road edge, and $k \in \{\mathrm{right}, \mathrm{left}\}$ indexes the two boundaries. The right boundary contributes a negative (leftward) force and the left boundary a positive (rightward) force. The $\tanh$ saturation prevents the force from diverging as $d_k \to 0$.
+
+\subsection{Force Saturation and Output}
+\label{sec:lat_output}
+
+The total lateral force sums over all platoon vehicles and both boundary contributions:
+
 \begin{equation}
-F_{\text{output}}[k] = \alpha_f \cdot F_{\text{final}}[k] + (1 - \alpha_f) \cdot F_{\text{output}}[k-1]
-\label{eq:lateral_filter}
+F_{\mathrm{total}} = \sum_{j} F_{\mathrm{lat},j} + F_{\mathrm{boundary,right}} + F_{\mathrm{boundary,left}}
+\label{eq:lat_total}
 \end{equation}
 
-with $\alpha_f = 0.3$ and saturation at $\pm 500$ N.
+where the index $j$ runs over all platoon vehicles in the scene. The output is saturated to a symmetric bound and filtered through a first-order exponential moving average (EMA):
+
+\begin{equation}
+F_{\mathrm{clip}} = \mathrm{clip}\!\left(F_{\mathrm{total}},\; -F_{\mathrm{lat,max}},\; F_{\mathrm{lat,max}}\right), \qquad F_{\mathrm{lat,max}} = 2000\,\mathrm{N}
+\label{eq:lat_saturation}
+\end{equation}
+
+\begin{equation}
+F_{\mathrm{out}}[k] = \alpha_f \cdot F_{\mathrm{clip}}[k] + (1 - \alpha_f)\cdot F_{\mathrm{out}}[k-1], \qquad \alpha_f = 0.3
+\label{eq:lat_ema}
+\end{equation}
+
+where $\alpha_f$ is the EMA smoothing coefficient and $k$ is the discrete time index. The saturation bound of $\pm 2000\,\mathrm{N}$ is four times the longitudinal bound, reflecting the greater lateral inertia during a lane change. The coefficient $\alpha_f = 0.3$ is higher than the longitudinal value of $0.2$, yielding a faster response to sudden lateral threats while still attenuating high-frequency noise.
 
 \section{Integration with Nash Equilibrium Control}
 
