@@ -1257,16 +1257,7 @@ F_{\text{total}} = F_{\text{leader}} + w_f \cdot F_{\text{follower}}
 \label{eq:bidirectional_force}
 \end{equation}
 
-The follower weight $w_f$ reflects the asymmetric information flow in Cooperative Adaptive Cruise Control (CACC) systems, where information primarily flows forward from leader to follower. The weight takes the value 0.5 during normal operation, 0.2 when the follower is joining and is far behind, and 0.4 when the follower is decelerating:
-
-\begin{equation}
-w_f = \begin{cases}
-0.5 & \text{normal operation} \\
-0.2 & \text{follower is joining (far behind)} \\
-0.4 & \text{follower is decelerating}
-\end{cases}
-\label{eq:follower_weight_impl}
-\end{equation}
+The follower weight $w_f$ reflects the asymmetric information flow in Cooperative Adaptive Cruise Control (CACC) systems, where information primarily flows forward from leader to follower. The ego vehicle therefore has more reliable information about the vehicle ahead than about the vehicle behind, which justifies weighting the follower contribution at $w_f = 0.5$
 
 This forward-dominant weighting ensures string stability by preventing the ego vehicle from over-reacting to follower dynamics.
 
@@ -1335,11 +1326,11 @@ This mechanism is essential for stable merging behavior, especially in scenarios
 The final force output is saturated to prevent excessive control commands:
 
 \begin{equation}
-F_{\text{output}} = \text{clip}(F_{\text{total}}, -500, 800) \text{ N}
+F_{\text{output}} = \text{clip}(F_{\text{total}}, -200, 800) \text{ N}
 \label{eq:force_saturation}
 \end{equation}
 
-The asymmetric limits reflect that stronger acceleration intervention may be needed (positive force for braking when too close to the leader) compared to negative force (accelerating when the follower is too close).
+The asymmetric limits reflect the directional asymmetry of risk: the repulsive upper bound of $800,\mathrm{N}$ commands a strong deceleration when the ego is dangerously close to the leader, while the attractive lower bound is capped at $-200,\mathrm{N}$ ($=-0.25,F_{\max}$) to prevent excessive acceleration when the vehicle is far behind the platoon.
 
 \subsection{Implementation Algorithm}
 
@@ -1384,7 +1375,7 @@ Algorithm \ref{alg:longitudinal_field_impl} summarizes the complete longitudinal
 \EndIf
 
 \State $F_{\text{total}} \gets F_{\text{leader}} + F_{\text{follower}}$
-\State $F_{\text{total}} \gets \text{clip}(F_{\text{total}}, -500, 800)$
+\State $F_{\text{total}} \gets \text{clip}(F_{\text{total}}, -200, 800)$
 \State \Return $F_{\text{total}}$
 \end{algorithmic}
 \end{algorithm}
@@ -1970,7 +1961,7 @@ This chapter developed the shared-control architecture of the platoon-merging sy
 
 The safety field and authority parameters used in both channels are listed in Table~\ref{tab:field_params_summary}. Dashes indicate parameters that are not defined for the corresponding channel. The phase-transition thresholds that govern the \textsc{Merge}~$\leftrightarrow$~\textsc{Following} state machine are listed in Table~\ref{tab:phase_transitions_summary}.
 
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \caption{Safety field and authority parameters (longitudinal and lateral).}
 \label{tab:field_params_summary}
@@ -2007,7 +1998,7 @@ EMA range $[\alpha_{\mathrm{base}}, \alpha_{\mathrm{fast}}]$ & $[0.05, 0.12]$ & 
 
 
 In Table~\ref{tab:phase_transitions_summary}, the entry conditions must hold simultaneously for the stability hold time $T_{\mathrm{stable}}$ before the transition into \textsc{Following} is committed. Exit conditions trigger an immediate return to \textsc{Merge}, except for the longitudinal divergence exit, which requires a hold of $T_{\mathrm{hold}}$ to filter out transient gap fluctuations.
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
 \caption{Phase transition thresholds (Merge~$\leftrightarrow$~  Following).}
 \label{tab:phase_transitions_summary}
