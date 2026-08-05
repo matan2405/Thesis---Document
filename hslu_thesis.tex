@@ -1022,16 +1022,13 @@ Chapter~4.
 % END OF CHAPTER 2
 %--------------------------------------------------------------
 %--------------------------------------------------------------
-% CHAPTER 3: SAFETY FIELD FORMULATIONS (REVISED)
-% Aligned with actual code implementation
-% Version: February 2026
-% Format: Academic prose without bullet points
+% CHAPTER 3: SAFETY FIELD FORMULATIONS 
 %--------------------------------------------------------------
 \chapter{Safety Field Formulations}
 
-This chapter develops the mathematical framework for quantifying collision risk in both the longitudinal and lateral directions. Both directions rest on a shared theoretical foundation: the \textit{driving safety field} (DSF) introduced by Wang et al.~\cite{wangDrivingSafetyField2015, wangDrivingSafetyField2016} and extended to elliptic obstacle representations by Li et al.~\cite{liSharedControlNovel2019}. The longitudinal field applies an elliptic potential to regulate the gap between the ego vehicle and its platoon neighbours; the lateral field applies the full Wang--Li formulation to all platoon members visible in the adjacent lane, generating repulsive forces that prevent lateral collisions during lane change. Both fields supply a common authority allocation mechanism (Section~\ref{sec:authority}) that determines the degree to which the automated system overrides the human driver within the Nash equilibrium framework. The implementation also introduces a dynamic phase detection system that adapts both fields to the current operating context, distinguishing active merging from steady-state following in the longitudinal direction and a five-phase lane-change sequence in the lateral direction.
+This chapter develops the mathematical framework for quantifying collision risk in both the longitudinal and lateral directions. Both directions rest on a shared theoretical foundation: the \textit{driving safety field} (DSF) introduced by Wang et al.~\cite{wangDrivingSafetyField2015, wangDrivingSafetyField2016} and extended to elliptic obstacle representations by Li et al.~\cite{liSharedControlNovel2019}. The longitudinal field applies an elliptic potential to regulate the gap between the ego vehicle and its platoon neighbors; the lateral field applies the full Wang--Li formulation to all platoon members visible in the adjacent lane, generating repulsive forces that prevent lateral collisions during lane change. Both fields supply a common authority allocation mechanism (Section~\ref{sec:authority_allocation}) that determines the degree to which the automated system overrides the human driver within the Nash equilibrium framework. The implementation also introduces a dynamic phase detection system that adapts both fields to the current operating context, distinguishing active merging from steady-state following in the longitudinal direction and a five-phase lane-change sequence in the lateral direction.
 
-Section~\ref{sec:dsf_theory} introduces the theoretical foundation of driving safety field theory. Section~\ref{sec:longitudinal_field} describes the bidirectional longitudinal safety field with phase detection. Section~\ref{sec:lateral_field} presents the Wang--Li lateral safety field. Section~\ref{sec:authority} details integration with the Nash control framework.
+Section~\ref{sec:dsf_theory} introduces the theoretical foundation of driving safety field theory. Section~\ref{sec:longitudinal_field} describes the bidirectional longitudinal safety field with phase detection. Section~\ref{sec:lateral_field} presents the Wang--Li lateral safety field. Section~\ref{sec:authority_allocation} defines the dynamic authority allocator. Section~\ref{sec:nash_integration} describes the coupling to the Nash equilibrium controller. Section~\ref{sec:chap3_compute} reviews the computational considerations. Section~\ref{sec:chap3_summary} summarizes the design and its parameter set.
 
 
 \section{Driving Safety Field Theory}
@@ -1291,7 +1288,8 @@ The system operates in two primary phases. The first is the \textbf{MERGING Phas
 |a_{\text{ego}}| &< a_{\text{threshold}} \label{eq:following_acc}
 \end{align}
 
-where $\gamma_{\text{gap}} = 0.15$ represents 15\% of the desired gap, $\gamma_v = 0.05$ represents 5\% of target velocity, $a_{\text{threshold}} = 0.5$ m/s², and all conditions must hold for $T_{\text{stable}} = 5$ seconds.
+where $\gamma_{\text{gap}} = 0.10$ represents 10\% of the desired gap, $\gamma_v = 0.05$ represents 5\% of the target velocity, $a_{\text{threshold}} = 0.5\,\mathrm{m/s^{2}}$, and all conditions must hold for $T_{\text{stable}} = 5$ seconds.
+
 
 \textbf{Exit from FOLLOWING Phase} occurs immediately if any threshold is violated:
 
@@ -1300,9 +1298,10 @@ where $\gamma_{\text{gap}} = 0.15$ represents 15\% of the desired gap, $\gamma_v
 |v_{\text{rel}}| &> \gamma_{v,\text{exit}} \cdot v_{\text{target}} \label{eq:merging_vel}
 \end{align}
 
-where $\gamma_{\text{gap,exit}} = 0.25$ provides 25\% hysteresis and $\gamma_{v,\text{exit}} = 0.10$ provides 10\% hysteresis.
+where $\gamma_{\text{gap,exit}} = 0.35$ provides the hysteresis gap-fraction threshold and $\gamma_{v,\text{exit}} = 0.10$ provides 10\% hysteresis on the velocity. The gap-exit condition additionally requires a hold time of $T_{\mathrm{hold}} = 3.0\,\mathrm{s}$ before triggering the return to \textsc{Merge}, which filters out transient gap fluctuations.
 
-The hysteresis between entry and exit thresholds (15\% vs 25\% for gap, 5\% vs 10\% for velocity) prevents oscillation between phases.
+
+The hysteresis between entry and exit thresholds (10\% vs 35\% for gap, 5\% vs 10\% for velocity) prevents oscillation between phases.
 
 \subsubsection{Soft Transition Function}
 
@@ -1411,7 +1410,7 @@ During \textsc{Approach}, the ego vehicle remains in its current lane while the 
 \begin{align}
 |y_{\mathrm{ego}} - y_{\mathrm{platoon}}| &< 0.3\,\mathrm{m} \label{eq:lat_following_y} \\
 |\psi| &< 0.05\,\mathrm{rad} \label{eq:lat_following_psi} \\
-\frac{|e_{\mathrm{gap}}|}{d_{\mathrm{des}}} &< \gamma_{\mathrm{gap}} = 0.10 \label{eq:lat_following_gap} \\
+\frac{|e_{\mathrm{gap}}|}{d_{\mathrm{des}}} &< \gamma_{\mathrm{gap}}^{\mathrm{lat}} = 0.10 \label{eq:lat_following_gap} \\
 |v_{\mathrm{ego}} - v_{\mathrm{leader}}| &< \delta_v = 0.5\,\mathrm{m/s} \label{eq:lat_following_vel} \\
 \left|\dot{e}_{\mathrm{gap}}\right| &< \dot{e}_{\mathrm{max}} = 0.3\,\mathrm{m/s} \label{eq:lat_conv_cond}
 \end{align}
@@ -1760,7 +1759,7 @@ Lateral Nash step              & $T_{\mathrm{lat}}$  & 20\,Hz & $0.05\,\mathrm{s
 
 The Nash loops run at lower rates than the physics loop because each solve involves an iterative best-response procedure over a prediction horizon of $N_p = 20$ steps, which is too expensive to run every 20\,ms. Between Nash ticks, the vehicle receives the last commanded shared control input, and the physics loop applies it unchanged.
 
-Both Nash loops remain inactive during the \textsc{Approach} phase (before the driver requests a merge), while the vehicle is under full manual control. When the driver send a join request the, coordinator enables Nash and transitions the phase state to \textsc{GapSearch}, at which point both loops activate simultaneously. They remain active through \textsc{Merge} and \textsc{Following}. To ensure a smooth handover at the \textsc{Approach} to \textsc{GapSearch} transition, both solvers are continuously warm-started during \textsc{Approach} from the driver's current control inputs and the measured vehicle state; the warm-start mechanism is described in detail in Section~\ref{sec:nash_warm}.
+Both Nash loops remain inactive during the \textsc{Approach} phase (before the driver requests a merge), while the vehicle is under full manual control. When the driver sends a join request, the coordinator enables Nash and transitions the phase state to \textsc{GapSearch}, at which point both loops activate simultaneously. They remain active through \textsc{Merge} and \textsc{Following}. To ensure a smooth handover at the \textsc{Approach} to \textsc{GapSearch} transition, both solvers are continuously warm-started during \textsc{Approach} from the driver's current control inputs and the measured vehicle state; the warm-start mechanism is described in detail in Section~\ref{sec:nash_warm}.
 
 \subsection{Authority Injection into Nash Cost Matrices}
 \label{sec:nash_alpha}
@@ -1971,7 +1970,7 @@ This chapter developed the shared-control architecture of the platoon-merging sy
 
 The safety field and authority parameters used in both channels are listed in Table~\ref{tab:field_params_summary}. Dashes indicate parameters that are not defined for the corresponding channel. The phase-transition thresholds that govern the \textsc{Merge}~$\leftrightarrow$~\textsc{Following} state machine are listed in Table~\ref{tab:phase_transitions_summary}.
 
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \caption{Safety field and authority parameters (longitudinal and lateral).}
 \label{tab:field_params_summary}
@@ -2008,7 +2007,7 @@ EMA range $[\alpha_{\mathrm{base}}, \alpha_{\mathrm{fast}}]$ & $[0.05, 0.12]$ & 
 
 
 In Table~\ref{tab:phase_transitions_summary}, the entry conditions must hold simultaneously for the stability hold time $T_{\mathrm{stable}}$ before the transition into \textsc{Following} is committed. Exit conditions trigger an immediate return to \textsc{Merge}, except for the longitudinal divergence exit, which requires a hold of $T_{\mathrm{hold}}$ to filter out transient gap fluctuations.
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \caption{Phase transition thresholds (Merge~$\leftrightarrow$~  Following).}
 \label{tab:phase_transitions_summary}
