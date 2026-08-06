@@ -1565,7 +1565,8 @@ where $\alpha_f$ is the smoothing coefficient of the EMA and $k$ is the discrete
 \section{Dynamic Authority Allocation}
 \label{sec:authority_allocation}
 
-The authority ratio $\lambda[k]$ governs the balance between system control and human input at every Nash timestep. A high $\lambda$ transfers authority to the autonomous system. When $\lambda$ close to zero, It returns full control to the driver. Both the longitudinal and lateral allocators follow a three-stage architecture: (1) a sigmoid mapping from the safety field force, (2) a performance-based sigmoid following Swain and Rath~\cite{swainCooperativeGameTheory2023} Eq.\,15, and (3) fusion via element-wise maximum and adaptive exponential moving average (EMA) smoothing. The two channels share the same sigmoid kernel but differ in their normalization inputs and output bounds.
+The authority ratio $\lambda[k]$ governs the balance between system control and human input at every Nash timestep. A high $\lambda$ transfers authority to the autonomous system, while a $\lambda$ close to zero returns full control to the driver. Both the longitudinal and lateral allocators follow a three-stage architecture: a sigmoid mapping from the safety-field force, a performance-based sigmoid following Swain and Rath~\cite{swainCooperativeGameTheory2023} Eq.\,15, and fusion via element-wise maximum and adaptive exponential moving average (EMA) smoothing. The two channels share the same sigmoid kernel but differ in their normalization inputs and output bounds. The formal conversion of $\lambda[k]$ to the scaling factor $\alpha[k] \in (0, 1]$ that enters the Nash cost is developed in Section~\ref{sec:authority_conversion}.
+
 
 \subsection{Shared Sigmoid Kernel}
 \label{sec:authority_sigmoid}
@@ -1771,37 +1772,56 @@ Rather than rebuilding the quadratic programming (QP) problem structure at every
 \subsection{Adaptive Human Weight $R_2$}
 \label{sec:nash_r2}
 
-In addition to the $\alpha$ scaling of $Q_2$, the human's effort penalty $R_2$ is adapted online to reflect how synchronized the ego vehicle is with the platoon. A normalized synchronization index is computed as
+In addition to the $\alpha$ scaling of $Q_2$ developed in Section~\ref{sec:nash_alpha}, the human's effort penalty $R_2$ is adapted online to reflect how synchronized the ego vehicle is with the target platoon state. The adaptation is driven by a normalized synchronization index $\ell_n \in [0, 1]$, defined so that $\ell_n = 0$ indicates that the ego is far from the target and $\ell_n = 1$ indicates full synchronization. The specific definition of $\ell_n$ differs between the two channels because the tracking objectives differ: the longitudinal channel measures synchronization against a two-dimensional target (gap and velocity), while the lateral channel measures it against a one-dimensional target (lateral offset) whose weighting further depends on the current phase.
 
+\subsubsection{Longitudinal Synchronization}
+
+The longitudinal synchronization index combines the instantaneous gap and velocity errors relative to the platoon target state:
 \begin{equation}
-\ell_n = \min\!\left(1 - \frac{|e_{\mathrm{gap}}|}{e_{\mathrm{gap,max}}},\; 1 - \frac{|e_v|}{e_{v,\mathrm{max}}}\right) \in [0, 1]
-\label{eq:ln_sync}
+\ell_n^{\text{long}}[k] = \min\!\left( 1 - \frac{|e_{\text{gap}}[k]|}{e_{\text{gap},\max}}, \; 1 - \frac{|e_v[k]|}{e_{v,\max}} \right)
+\label{eq:ln_long_sync}
 \end{equation}
+where $e_{\text{gap}}[k]$ and $e_v[k]$ are the instantaneous gap and velocity errors relative to the platoon target, $e_{\text{gap},\max} = 10\,\mathrm{m}$ and $e_{v,\max} = 1.5\,\mathrm{m/s}$ are their normalization bounds, and $\ell_n^{\text{long}}[k]$ is clipped to $[0, 1]$. The minimum of the two normalized terms ensures that a large error in either component is sufficient to drive $\ell_n$ toward zero.
 
-where $e_{\mathrm{gap}}$ and $e_v$ are the instantaneous gap and velocity errors relative to the target platoon state, $e_{\mathrm{gap,max}}$ and $e_{v,\mathrm{max}}$ are their normalization bounds, $\ell_n = 0$ indicates the ego is far from the platoon in both gap and velocity, and $\ell_n = 1$ indicates full synchronization. The target $R_2$ interpolates linearly between an initial value $R_{2,\mathrm{start}}$ (large, restraining the human when far away) and a following value $R_{2,\mathrm{follow}}$ (small, giving the human more authority in steady state):
+\subsubsection{Lateral Synchronization: Phase-Dependent Definition}
 
+The lateral synchronization index has two distinct forms depending on the current phase of the merge state machine (Section~\ref{sec:mobil_decision}). During the \textsc{Merge} phase, the index measures how close the ego lateral position $y_{\text{ego}}$ is to the target lane center $y_{\text{target}}$:
 \begin{equation}
-R_{2,\mathrm{target}} = R_{2,\mathrm{start}} + \left(R_{2,\mathrm{follow}} - R_{2,\mathrm{start}}\right) \ell_n
+\ell_n^{\text{lat, merge}}[k] = \mathrm{clip}\!\left( \frac{W_{\text{lane}}/2 - |e_y[k]|}{W_{\text{lane}}/2}, \; 0, \; 1 \right)
+\label{eq:ln_lat_merge}
+\end{equation}
+where $e_y[k] = y_{\text{ego}}[k] - y_{\text{target}}[k]$ is the signed lateral offset, $W_{\text{lane}} = 3.5\,\mathrm{m}$ is the nominal lane width, and $\ell_n^{\text{lat, merge}}[k]$ ramps linearly from $0$ at the half-lane boundary to $1$ at the target lane center. This form matches the Merge-phase objective of reducing the lateral offset.
+
+During the \textsc{Following} phase, the ego is already inside the target lane and the objective shifts to suppressing small residual offsets that would otherwise grow into a limit cycle. The synchronization index is replaced by a lane-boundary encroachment fraction $\beta_y[k]$ computed against a narrow dead-band around the lane center:
+\begin{equation}
+\beta_y[k] = \mathrm{clip}\!\left( \frac{|e_y[k]| - d_{\text{dead}}}{W_{\text{lane}}/2 - d_{\text{dead}}}, \; 0, \; 1 \right)
+\label{eq:beta_y_following}
+\end{equation}
+where $d_{\text{dead}} = 0.03\,\mathrm{m}$ is the dead-band radius and $\beta_y[k] = 0$ within the dead-band. The interpolation direction of the target $R_2$ (Eq.~\eqref{eq:r2_target}) is inverted for this phase: the effort penalty rises from a small in-lane value $R_{2,\text{free}}^{\text{lat}} = 250\,000$ (giving the human authority when centered) toward a large boundary value that returns authority to the system as the ego approaches the half-lane width.
+
+\subsubsection{Target Effort Penalty}
+
+For both channels, the target effort penalty interpolates linearly between two channel-specific endpoints:
+\begin{equation}
+R_{2,\text{target}}[k] = R_{2,\text{start}} + \left( R_{2,\text{follow}} - R_{2,\text{start}} \right) \ell_n[k]
 \label{eq:r2_target}
 \end{equation}
+where $R_{2,\text{start}}$ is the large restraining value applied when the ego is far from the target ($\ell_n \to 0$), $R_{2,\text{follow}}$ is the small in-platoon value applied at full synchronization ($\ell_n \to 1$), and $\ell_n[k]$ is $\ell_n^{\text{long}}$ for the longitudinal channel and $\ell_n^{\text{lat, merge}}$ for the lateral channel during \textsc{Merge}. The channel-specific values are $(R_{2,\text{start}}^{\text{long}}, R_{2,\text{follow}}^{\text{long}}) = (120\,000, 40\,000)$ and $(R_{2,\text{start}}^{\text{lat}}, R_{2,\text{follow}}^{\text{lat}}) = (250\,000, 30\,000)$. In the \textsc{Following} phase of the lateral channel, the endpoints of Eq.~\eqref{eq:r2_target} are swapped to $R_{2,\text{start}} = R_{2,\text{free}}^{\text{lat}} = 250\,000$ and $R_{2,\text{follow}} = R_{2,\text{follow}}^{\text{lat}} = 30\,000$, and the driving quantity is $\beta_y[k]$ rather than $\ell_n$.
 
-where $R_{2,\mathrm{target}}$ is the interpolated target effort penalty at the current synchronization index. The current $R_2$ tracks this target through an exponential moving average (EMA) with coefficient $\alpha_{R_2} = 0.05$. A dead-band update threshold prevents the sparse QP $P$ matrix from being rebuilt when the change in $R_2$ is below $\Delta R_{2,\min}$, which reduces per-tick allocation cost.
+The current $R_2$ tracks $R_{2,\text{target}}$ through an exponential moving average (EMA) with coefficient $\alpha_{R_2} = 0.05$ shared by both channels. A dead-band update threshold prevents the sparse QP $P$ matrix from being rebuilt when the change in $R_2$ is below $\Delta R_{2,\min}$, with channel-specific values $\Delta R_{2,\min}^{\text{long}} = 50$ and $\Delta R_{2,\min}^{\text{lat}} = 200$; this reduces per-cycle allocation cost during quasi-stationary operation without altering the equilibrium.
 
 \subsubsection{Activity-Based $R_2$ Scaling}
 
 Following Lazcano et al.~\cite{lazcanoMPCBasedHapticShared2021}, an additional scaling reduces $R_2$ when the driver applies non-trivial pedal or steering input:
-
 \begin{equation}
-R_{2,\mathrm{eff}} = R_{2,\mathrm{current}} \cdot \left(1 - \mathrm{clip}\!\left(\frac{\mathrm{activity}}{0.3},\, 0,\, 1\right)\left(1 - s_{\min}\right)\right)
+R_{2,\text{eff}}[k] = R_2[k] \cdot \left( 1 - \mathrm{clip}\!\left( \frac{a_d[k]}{0.3}, \, 0, \, 1 \right) \left( 1 - s_{\min} \right) \right)
 \label{eq:r2_activity}
 \end{equation}
-
-where $\mathrm{activity} \in [0, 1]$ is the maximum of throttle, brake, or absolute steering input, $R_{2,\mathrm{current}}$ is the value tracked by the EMA update, and $s_{\min} = 0.3$ is the minimum residual scale. The driver is thereby given perceptible authority during intentional inputs: pressing the pedal amplifies the human contribution $u_2$ even when the safety-based $\lambda$ would otherwise suppress it.
+where $a_d[k] \in [0, 1]$ is the driver activity, defined as the maximum of the normalized throttle, brake, or absolute steering input at cycle $k$; $R_2[k]$ is the value tracked by the synchronization EMA of Eq.~\eqref{eq:r2_target}; $R_{2,\text{eff}}[k]$ is the effective effort penalty passed to the solver; and $s_{\min} = 0.25$ is the minimum residual scaling factor. The driver is thereby given perceptible authority during intentional inputs: pressing the pedal amplifies the human contribution $u_2$ even when the safety-based $\lambda$ would otherwise suppress it.
 
 \subsubsection{Conflict-Based $R_2$ Boost (Lateral Only)}
 
 During the \textsc{Merge} phase, a moving-average filter over the last five Nash ticks detects opposing steering intents between the system ($u_1$) and the human ($u_2$):
-
 \begin{equation}
 \mathrm{conflict}[k] = \begin{cases}
 1 & \mathrm{sign}(u_1) \neq \mathrm{sign}(u_2) \text{ and both above threshold} \\
@@ -1809,17 +1829,15 @@ During the \textsc{Merge} phase, a moving-average filter over the last five Nash
 \end{cases}
 \label{eq:conflict_indicator}
 \end{equation}
-
-where the threshold on each input is $10^{-4}$ rad and $\mathrm{conflict}[k]$ is the binary indicator of an opposing-intent event at tick $k$. When the moving-average $\overline{\mathrm{conflict}}$ exceeds a $0.2$ dead-band, the lateral $R_2$ is boosted according to
-
+where the threshold on each input is $10^{-4}\,\mathrm{rad}$ and $\mathrm{conflict}[k]$ is the binary indicator of an opposing-intent event at tick $k$. When the moving average $\overline{\mathrm{conflict}}$ exceeds a $0.2$ dead-band, the lateral $R_2$ is boosted according to
 \begin{equation}
-R_{2,\mathrm{lat}} \leftarrow R_{2,\mathrm{lat}} \cdot \left(1 + b_c\right), \quad b_c = B_{\max} \cdot \mathrm{clip}\!\left(\frac{\overline{\mathrm{conflict}} - 0.2}{0.6},\, 0,\, 1\right)
+R_2^{\text{lat}} \leftarrow R_2^{\text{lat}} \cdot \left( 1 + b_c \right), \qquad b_c = B_{\max} \cdot \mathrm{clip}\!\left( \frac{\overline{\mathrm{conflict}} - 0.2}{0.6}, \, 0, \, 1 \right)
 \label{eq:conflict_boost}
 \end{equation}
-
-where $B_{\max} = 0.5$ is the maximum boost, $\overline{\mathrm{conflict}}$ is the moving-average conflict rate, and $b_c \in [0, B_{\max}]$ is the resulting scaling factor. The boost is zero below the 0.2 dead-band, ramps linearly through the interval $[0.2, 0.8]$, and saturates at $B_{\max}$ above 0.8. The moving-average filter ensures that isolated one-tick disagreements between the two players (for example, transient sensor noise) do not trigger a boost; only a sustained tug-of-war lasting at least one full tick window raises $R_{2,\mathrm{lat}}$, which reduces the magnitude of $u_2^{*}$ in subsequent solves and damps prolonged steering oscillation.
+where $B_{\max} = 0.5$ is the maximum boost, $\overline{\mathrm{conflict}}$ is the moving-average conflict rate, and $b_c \in [0, B_{\max}]$ is the resulting scaling factor. The boost is zero below the 0.2 dead-band, ramps linearly through the interval $[0.2, 0.8]$, and saturates at $B_{\max}$ above 0.8. The moving-average filter ensures that isolated one-tick disagreements between the two players (for example, transient sensor noise) do not trigger a boost; only a sustained tug-of-war lasting at least one full tick window raises $R_2^{\text{lat}}$, which reduces the magnitude of $u_2^{*}$ in subsequent solves and damps prolonged steering oscillation.
 
 The boost is applied only during the \textsc{Merge} phase. In \textsc{Following}, the adaptive $Q_1$ mechanism described in Section~\ref{sec:nash_q1} already suppresses residual lateral offsets, and applying both mechanisms concurrently would double-count the correction.
+
 
 \subsection{Adaptive Cost Matrix $Q_1$ in Following Phase}
 \label{sec:nash_q1}
