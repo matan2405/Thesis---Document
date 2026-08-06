@@ -868,7 +868,7 @@ speed deviates by more than $2\;\mathrm{m/s}$ from the last linearization point.
 \subsection{Discrete-Time Representation}
 
 The continuous-time matrices are converted to discrete time by zero-order hold (ZOH)
-discretisation at the Nash control period $\Delta t_{\mathrm{lat}} = 0.05\;\mathrm{s}$
+Discretization at the Nash control period $\Delta t_{\mathrm{lat}} = 0.05\;\mathrm{s}$
 (20~Hz), with the matrix exponential evaluated numerically. Between Nash updates, the
 most recent steering command is held constant.
 
@@ -1603,7 +1603,7 @@ A high risk force \emph{or} a large tracking error is therefore sufficient to ra
 
 \subsubsection{Stage 1 — Safety Sigmoid}
 
-The longitudinal safety field force $F_{\mathrm{total}}$ computed in Section~\ref{sec:longitudinal_field} is passed through Equation~\ref{eq:safety_sigmoid} with parameters $\lambda_{\min} = 0.1$, $\lambda_{\max} = 100$, $F_{\mathrm{mid}} = 400\,\mathrm{N}$, and $k_s = 0.015\,\mathrm{N}^{-1}$.
+The longitudinal safety field force $F_{\mathrm{total}}$ computed in Section~\ref{sec:longitudinal_field} is passed through Equation~\ref{eq:safety_sigmoid} with parameters $\lambda_{\min} = 0.1$, $\lambda_{\max} = 50$, $F_{\mathrm{mid}} = 400\,\mathrm{N}$, and $k_s = 0.015\,\mathrm{N}^{-1}$.
 
 \subsubsection{Stage 2 — Gap and Velocity Performance Sigmoid}
 
@@ -1643,7 +1643,7 @@ where $\alpha_{\mathrm{base}} = 0.05$ is the slow EMA coefficient and $\alpha_{\
 
 \subsubsection{Stage 1 — Safety Sigmoid}
 
-The lateral safety field force from Section~\ref{sec:lateral_field} is passed through Equation~\ref{eq:safety_sigmoid} with $\lambda_{\min} = 0.1$, $\lambda_{\max} = 10$, $F_{\mathrm{mid}} = 200\,\mathrm{N}$, and $k_s = 0.025\,\mathrm{N}^{-1}$. The narrower range $\lambda \in [0.1, 10]$ compared with the longitudinal range $[0.1, 100]$ reflects the observation that excessive authority during a lane change produces abrupt steering corrections that reduce passenger comfort.
+The lateral safety field force from Section~\ref{sec:lateral_field} is passed through Equation~\ref{eq:safety_sigmoid} with $\lambda_{\min} = 0.1$, $\lambda_{\max} = 10$, $F_{\mathrm{mid}} = 200\,\mathrm{N}$, and $k_s = 0.025\,\mathrm{N}^{-1}$. The narrower range $\lambda \in [0.1, 10]$ compared with the longitudinal range $[0.1, 50]$ reflects the observation that excessive authority during a lane change produces abrupt steering corrections that reduce passenger comfort.
 
 \subsubsection{Stage 2 — Lane-Offset Performance Sigmoid}
 
@@ -1764,9 +1764,9 @@ J_2(u_1, u_2) &= \int_{t}^{t+T_p} \Bigl( \alpha \cdot \bigl\| y(\tau) - r_2(\tau
 
 where $\tau$ is the prediction time variable, $t$ is the current time, $T_p = N_p \cdot T_{\mathrm{Nash}}$ is the prediction horizon length, $y(\tau)$ is the predicted output trajectory under the joint control $u(\tau) = u_1(\tau) + u_2(\tau)$, $r_1(\tau)$ and $r_2(\tau)$ are the system and human reference trajectories, $Q_1$ and $Q_2$ are the tracking-weight matrices for the two players, and $R_1$, $R_2$ are the effort penalties on each player's individual input. For numerical solution the horizon is discretized into $N_p = 20$ steps of duration $T_{\mathrm{Nash}}$, the linearized vehicle model is rolled out from the current state $\mathbf{x}_0$ over the horizon, and the resulting predicted output takes the compact stacked form $Y = H\,U + F\,\mathbf{x}_0$, where $H$ is the input-to-output prediction matrix, $F$ is the free-response matrix, and $U$ is the stacked joint control sequence. Under this discretization, Equations~\ref{eq:nash_j1}--\ref{eq:nash_j2} reduce to quadratic programs in the stacked $u_1$ and $u_2$ sequences respectively.
 
-The scalar $\alpha = 1/(1+\lambda)$ scales the human's tracking weight. At $\lambda = 0.1$ (safe conditions), $\alpha \approx 0.91$ and the human's reference dominates. At $\lambda = 100$ (emergency), $\alpha \approx 0.01$ and the human's tracking penalty nearly vanishes, so the human's optimal input aligns with the system reference $r_1$.
+The scalar $\alpha = 1/(1+\lambda)$ scales the human's tracking weight. At $\lambda = 0.1$ (safe conditions), $\alpha \approx 0.91$ and the human's reference dominates. At $\lambda = 50$ (emergency), $\alpha \approx 0.01$ and the human's tracking penalty nearly vanishes, so the human's optimal input aligns with the system reference $r_1$.
 
-Rather than rebuilding the quadratic programming (QP) problem structure at every Nash tick, the solver pre-computes a set of problem instances at initialization, one for each level of a discrete $\lambda$ grid. The longitudinal channel uses $L_\lambda = 11$ levels and the lateral channel uses $7$ levels, both log-spaced over $[0.1, 100]$ and $[0.1, 10]$ respectively. At runtime the requested $\lambda$ is snapped to the nearest grid point in log-space, and the corresponding pre-computed problem instance is solved. This removes the most expensive numerical step of the QP setup from the real-time control loop and keeps the per-tick computational cost bounded.
+Rather than rebuilding the quadratic programming (QP) problem structure at every Nash tick, the solver pre-computes a set of problem instances at initialization, one for each level of a discrete $\lambda$ grid. The longitudinal channel uses $L_\lambda = 11$ levels and the lateral channel uses $7$ levels, both log-spaced over $[0.1, 50]$ and $[0.1, 10]$ respectively. At runtime the requested $\lambda$ is snapped to the nearest grid point in log-space, and the corresponding pre-computed problem instance is solved. This removes the most expensive numerical step of the QP setup from the real-time control loop and keeps the per-tick computational cost bounded.
 
 \subsection{Adaptive Human Weight $R_2$}
 \label{sec:nash_r2}
@@ -1986,7 +1986,7 @@ Boundary proximity $d_{\mathrm{prox}}$         & --                 & $3.0\,\mat
 Maximum force                                  & $800\,\mathrm{N}$  & $2000\,\mathrm{N}$    \\
 EMA filter coefficient $\alpha_f$              & $0.2$              & $0.3$                  \\
 \hline
-Authority range $[\lambda_{\min}, \lambda_{\max}]$ & $[0.1, 100]$     & $[0.1, 10]$          \\
+Authority range $[\lambda_{\min}, \lambda_{\max}]$ & $[0.1, 50]$     & $[0.1, 10]$          \\
 Force midpoint $F_{\mathrm{mid}}$              & $400\,\mathrm{N}$  & $200\,\mathrm{N}$      \\
 Sigmoid steepness $k_s$                        & $0.015\,\mathrm{N}^{-1}$ & $0.025\,\mathrm{N}^{-1}$ \\
 Swain--Rath slope $M_1$, centre $M_2$          & $2.0$, $0.5$       & $2.0$, $0.5$           \\
@@ -2032,103 +2032,100 @@ The safety field, the authority allocator, and the Nash integration described in
 \chapter{Game-Theoretic Framework}
 \label{ch:game_theory}
 
-This chapter presents the complete game-theoretic formulation for shared control during platoon merging. The framework applies to both longitudinal control (acceleration) and lateral control (steering), with each domain requiring its own state-space model, cost function weights, and authority allocation strategy. Section~\ref{sec:nash_formulation} introduces the Nash game structure. Section~\ref{sec:dmpc} describes the Distributed Model Predictive Control (DMPC) prediction framework for both domains. Section~\ref{sec:cost_functions} defines the cost functions, including the cross-coupling terms that enable cooperation. Section~\ref{sec:authority_allocation} presents the dynamic authority allocation mechanism. Section~\ref{sec:solution_algorithm} details the DPP-compliant stacked Quadratic Programming solution. Section~\ref{sec:reference_generation} describes the reference trajectory generation for both players. Section~\ref{sec:comparison} provides a direct comparison between the longitudinal and lateral implementations.
+This chapter develops the game-theoretic formulation for shared control during platoon merging. The framework applies to both the longitudinal channel (acceleration) and the lateral channel (steering). Each channel carries its own state-space model, cost function weights, and authority allocation strategy. Section~\ref{sec:nash_formulation} introduces the Nash game structure, in which coordination between the autonomous system and the human driver emerges from a scalar authority parameter $\lambda[k]$ that scales the human's cost function rather than from explicit cross-coupling weights between the two players. Section~\ref{sec:dmpc} describes the Distributed Model Predictive Control (DMPC) prediction framework used by both channels. Section~\ref{sec:cost_functions} defines the two players' cost functions and the role of $\lambda[k]$ in producing cooperative equilibrium. Section~\ref{sec:authority_allocation_} details the dynamic authority allocation mechanism: the longitudinal channel combines a safety-force sigmoid with a performance-based term derived from normalized tracking errors, while the lateral channel uses a smoothed sigmoid mapping alone. Section~\ref{sec:solution_algorithm} presents the DPP-compliant Quadratic Programming solution, in which each player's best-response problem is solved by OSQP with pre-computed $\lambda$ levels to preserve real-time performance. Section~\ref{sec:reference_generation} describes the reference trajectory generation for both players. Section~\ref{sec:comparison} summarizes the differences between the two implementations.
 
-% ===================================================================
+
 \section{Nash Game Formulation}
 \label{sec:nash_formulation}
-% ===================================================================
 
 \subsection{Two-Player Non-Cooperative Game}
 
-The shared control problem is formulated as a non-cooperative differential game between two players, following the framework of Li et al.~\cite{li_shared_2019}. Player~1 is the autonomous system, and Player~2 is the human driver. Both players operate on the same vehicle, applying their respective control inputs(longitudinal acceleration or steering angle) to a shared dynamic system.
+The shared control problem is formulated as a non-cooperative differential game between two players, following the framework of Li et al.~\cite{liSharedControlNovel2019} and its adaptation by Pustilnik and Borrelli~\cite{pustilnikGeneralizedNashEquilibrium2025}. Player~1 is the autonomous system, and Player~2 is the human driver. Both players operate on the same vehicle and apply their respective control inputs (longitudinal acceleration or steering angle) to a shared dynamic system.
 
-Although the formulation is non-cooperative in the game-theoretic sense, cooperative behavior emerges through two mechanisms. The first is the cross-coupling cost terms $S_1$ and $S_2$, which penalize each player for the other player's control effort. The second is the dynamic authority allocation parameter $\lambda(k)$, which scales the human driver's cost function based on the current risk level assessed through the driving safety field~\cite{wang_driving_2015, wang_driving_2016}.
+Although the formulation is non-cooperative in the game-theoretic sense, cooperative behavior emerges through the dynamic authority parameter $\lambda[k]$. This scalar, computed from the driving safety field~\cite{wangDrivingSafetyField2015, wangDrivingSafetyField2016} by the authority allocator, scales the human's cost function so that under high risk the human's optimal response aligns with the system's reference trajectory. The implementation does not use explicit cross-coupling weight matrices between the two players; the coupling enters solely through the scaling factor $\alpha = 1/(1+\lambda[k])$ that multiplies the tracking term of Player~2 in the stacked cost.
 
-A central design principle is that each player tracks its own reference trajectory independently. The autonomous system tracks the safety-optimal reference $\mathbf{r}_1$, while the human driver tracks their comfort-oriented reference $\mathbf{r}_2$. No blending of references occurs within the Nash game; coordination between players arises solely from the cost function structure and the post-optimization authority blending of the resulting control inputs:
+A key design principle is that each player tracks its own reference trajectory independently. The autonomous system tracks the safety-optimal reference $\mathbf{r}_1$, while the human driver tracks the reference $\mathbf{r}_2$ derived from an online driver model. No blending of references occurs within the Nash game. Coordination between players arises from the $\alpha$-scaled cost structure and from the additive combination of the two players' optimal inputs at the vehicle interface:
 \begin{equation}
-u_{\text{shared}}[k] = \alpha[k] \cdot u_1^*[k] + (1 - \alpha[k]) \cdot u_2^*[k]
+u_{\text{shared}}[k] = u_1^{*}[k] + u_2^{*}[k]
 \label{eq:shared_control_ch4}
 \end{equation}
-where $\alpha[k] = \lambda[k] / (1 + \lambda[k])$ converts the authority ratio to a blending weight~\cite{li_shared_2019}.
+where $u_1^{*}[k]$ and $u_2^{*}[k]$ are the first-step optimal actions returned by the Nash solvers of Player~1 and Player~2 respectively, and $u_{\text{shared}}[k]$ is the resulting command applied to the vehicle actuator (throttle/brake for the longitudinal channel, steering angle for the lateral channel) after saturation to the physical actuator bounds. The additive form reflects the physical fact that both players actuate the same input channel: the autonomous system's contribution and the driver's contribution sum at the actuator, and it is the equilibrium condition on $u_1^{*}$ and $u_2^{*}$ (rather than an explicit blending rule) that determines how authority is distributed.
 
 \subsection{Nash Equilibrium Definition}
 
-A strategy pair $(D_1^*, D_2^*)$ constitutes a Nash equilibrium if neither player can unilaterally improve their cost by deviating~\cite{jond_connected_2023}:
+A strategy pair $(D_1^{*}, D_2^{*})$ constitutes a Nash equilibrium if neither player can unilaterally improve their cost by deviating~\cite{jondConnectedAutomatedVehicle2023}:
 \begin{align}
-J_1(D_1^*, D_2^*) &\leq J_1(D_1, D_2^*) \quad \forall D_1 \label{eq:nash_def_1}\\
-J_2(D_1^*, D_2^*) &\leq J_2(D_1^*, D_2) \quad \forall D_2 \label{eq:nash_def_2}
+J_1(D_1^{*}, D_2^{*}) &\leq J_1(D_1, D_2^{*}) \quad \forall D_1 \label{eq:nash_def_1}\\
+J_2(D_1^{*}, D_2^{*}; \lambda) &\leq J_2(D_1^{*}, D_2; \lambda) \quad \forall D_2 \label{eq:nash_def_2}
 \end{align}
+where $D_1$ and $D_2$ are the stacked control sequences of Player~1 and Player~2 over the prediction horizon, $J_1$ and $J_2$ are their quadratic cost functionals defined in Section~\ref{sec:cost_functions}, and $\lambda = \lambda[k]$ is the current authority ratio that scales the tracking term of $J_2$.
 
-Unlike centralized optimization, which minimizes a single combined objective, the Nash equilibrium preserves individual objectives while achieving coordination through the dynamic coupling via $\lambda[k]$ and the cross-coupling weights $S_1$, $S_2$~\cite{li_shared_2019}.
+Unlike centralized optimization, which minimizes a single combined objective, the Nash equilibrium preserves individual objectives and achieves coordination through the $\lambda$-scaling of $J_2$~\cite{liSharedControlNovel2019}.
 
 \subsection{Game Structure per Control Cycle}
 
-At each control cycle $k$, the game proceeds as follows:
+At each Nash control cycle $k$, the game proceeds as follows:
 \begin{enumerate}
-\item Both players observe the current state $\mathbf{x}[k]$.
-\item The safety field computes the risk force $F_{\text{total}}[k]$ (Chapter~3, based on~\cite{wang_driving_2015, wang_driving_2016, song_vehicle_2013}).
-\item The authority allocator maps the force to an authority ratio $\lambda[k]$.
-\item Both players' optimization problems are solved simultaneously as a single stacked QP.
-\item The shared control is computed via Eq.~\eqref{eq:shared_control_ch4}.
+\item Both players observe the current vehicle state $\mathbf{x}[k]$.
+\item The corresponding safety field computes the risk force $F[k]$ (Chapter~3): $F_{\text{long}}[k]$ for the longitudinal cycle and $F_{\text{lat}}[k]$ for the lateral cycle.
+\item The authority allocator maps $F[k]$ to the authority ratio $\lambda[k]$.
+\item Each player's best-response Quadratic Program is solved by OSQP with the pre-computed $\lambda$-level structure of Section~\ref{sec:solution_algorithm}, returning $u_1^{*}[k]$ and $u_2^{*}[k]$.
+\item The shared control is computed via Eq.~\eqref{eq:shared_control_ch4} and clipped to the actuator bounds.
 \end{enumerate}
 
-This procedure applies identically to both the longitudinal and lateral controllers, differing only in the state-space model, weight matrices, and constraint values.
+This procedure applies identically to both the longitudinal and lateral controllers, differing only in the state-space model, weight matrices, prediction rate, and constraint values.
 
-% ===================================================================
+
 \section{Distributed Model Predictive Control Framework}
 \label{sec:dmpc}
-% ===================================================================
+
+Both Nash controllers propagate the vehicle state over a finite prediction horizon $N_p$ using a linearized state-space model. The longitudinal channel uses a two-state model that captures aerodynamic drag as a small linear damping term. The lateral channel uses the four-state bicycle model. The two models are re-linearized at runtime whenever the longitudinal speed $v_x$ drifts by more than a threshold, which keeps the prediction accurate across the wide speed range spanned by a merge from $20$ to $33\,\mathrm{m/s}$.
 
 \subsection{Longitudinal Dynamics}
 \label{sec:longitudinal_dynamics}
 
-The longitudinal dynamics are described by a double-integrator model with state $\mathbf{x} = [p, v]^T$ (position and velocity) and control input $u$ (acceleration). The discrete-time matrices are:
+The longitudinal dynamics are described by a two-state model with state $\mathbf{x} = [x, v_x]^{\top}$ (longitudinal position and speed) and control input $u = a_{\text{des}}$ (desired acceleration in $\mathrm{m/s^2}$). The continuous-time state-space matrices are:
 \begin{equation}
-\mathbf{A}_{\text{long}} = \begin{bmatrix} 1 & T_s \\ 0 & 1 \end{bmatrix}, \quad
-\mathbf{B}_{\text{long}} = \begin{bmatrix} T_s^2/2 \\ T_s \end{bmatrix}, \quad
-\mathbf{C}_{\text{long}} = \mathbf{I}_2
+\mathbf{A}_c^{\text{long}} = \begin{bmatrix} 0 & 1 \\ 0 & -d_{\text{lin}} \end{bmatrix}, \quad
+\mathbf{B}_c^{\text{long}} = \begin{bmatrix} 0 \\ 1 \end{bmatrix}, \quad
+\mathbf{C}^{\text{long}} = \mathbf{I}_2
 \label{eq:long_ss}
 \end{equation}
+where $d_{\text{lin}} = \rho \, C_d \, A_f \, |v_x| / m_{\text{eff}}$ is the linearized drag coefficient, $\rho = 1.225\,\mathrm{kg/m^3}$ is the air density, $C_d$ is the drag coefficient, $A_f$ is the frontal area, and $m_{\text{eff}}$ is the effective inertial mass. The unit entry in $\mathbf{B}_c^{\text{long}}$ reflects the fact that the control input is specified as a desired acceleration in $\mathrm{m/s^2}$: the throttle and brake commands that realize this acceleration are computed downstream by an inverse-powertrain map that cancels the drag, rolling-resistance, and grade terms as feedforward, so from the Nash solver's perspective the control input directly drives $\dot{v}_x$. Both players apply acceleration to the same vehicle, hence $\mathbf{B}_1 = \mathbf{B}_2 = \mathbf{B}_c^{\text{long}}$. The output selection matrix $\mathbf{C}^{\text{long}} = \mathbf{I}_2$ produces $\mathbf{z} = [x, v_x]^{\top}$ with $n_x = 2$ states and $n_z = 2$ outputs.
 
-Both players apply acceleration to the same vehicle, so $\mathbf{B}_1 = \mathbf{B}_2 = \mathbf{B}_{\text{long}}$. The output is $\mathbf{z} = [p, v]^T$ with $n_x = 2$ states and $n_z = 2$ outputs.
+Discretization to the Nash step $T_s = T_{\text{long}} = 0.1\,\mathrm{s}$ uses the augmented matrix exponential:
+\begin{equation}
+\begin{bmatrix} \mathbf{A}^{\text{long}} & \mathbf{B}^{\text{long}} \\ \mathbf{0} & \mathbf{1} \end{bmatrix}
+= \exp\!\left( \begin{bmatrix} \mathbf{A}_c^{\text{long}} & \mathbf{B}_c^{\text{long}} \\ \mathbf{0} & 0 \end{bmatrix} T_s \right)
+\label{eq:long_zoh}
+\end{equation}
+which yields the zero-order-hold discretization $(\mathbf{A}^{\text{long}}, \mathbf{B}^{\text{long}})$ used by the solver.
 
 \subsection{Lateral Dynamics: Bicycle Model}
 \label{sec:lateral_dynamics}
 
-The lateral dynamics use the global-frame bicycle model (Section~\ref{sec:global_frame_model}) with state $\mathbf{x} = [y, \dot{y}, \psi, \dot{\psi}]^T$ (lateral position, lateral velocity, heading angle, yaw rate) and control input $\delta$ (front-wheel steering angle). The continuous-time state-space matrices are:
+The lateral dynamics use the linearized single-track bicycle model of Chapter~2, with state $\mathbf{x} = [y, \dot{y}, \psi, \dot{\psi}]^{\top}$ (lateral position, lateral velocity, heading angle, and yaw rate) and control input $\delta$ (front-wheel steering angle). The continuous-time state-space matrices are:
 \begin{equation}
-\mathbf{A}_c = \begin{bmatrix}
+\mathbf{A}_c^{\text{lat}} = \begin{bmatrix}
 0 & 1 & v_x & 0 \\[4pt]
-0 & -\dfrac{2(C_f + C_r)}{m v_x} & 0 & -v_x - \dfrac{2(L_f C_f - L_r C_r)}{m v_x} \\[4pt]
+0 & -\dfrac{2(C_{af} + C_{ar})}{m \, v_x} - (1 - f_v) k_{\dot{y}} & 0 & \dfrac{2(l_r C_{ar} - l_f C_{af})}{m \, v_x} - v_x \\[4pt]
 0 & 0 & 0 & 1 \\[4pt]
-0 & -\dfrac{2(L_f C_f - L_r C_r)}{I_z v_x} & 0 & -\dfrac{2(L_f^2 C_f + L_r^2 C_r)}{I_z v_x}
+0 & \dfrac{2(l_r C_{ar} - l_f C_{af})}{I_z \, v_x} & 0 & -\dfrac{2(l_f^2 C_{af} + l_r^2 C_{ar})}{I_z \, v_x} - (1 - f_v) k_{\dot{\psi}}
 \end{bmatrix}
 \label{eq:Ac_bicycle}
 \end{equation}
 \begin{equation}
-\mathbf{B}_c = \begin{bmatrix} 0 \\ 2C_f / m \\ 0 \\ 2L_f C_f / I_z \end{bmatrix}
+\mathbf{B}_c^{\text{lat}} = \begin{bmatrix} 0 \\ 2 C_{af} / m \\ 0 \\ 2 l_f C_{af} / I_z \end{bmatrix}
 \label{eq:Bc_bicycle}
 \end{equation}
+where $C_{af}$ and $C_{ar}$ are the per-tire cornering stiffness coefficients of the front and rear axles (each entry is multiplied by two inside $\mathbf{A}_c^{\text{lat}}$ and $\mathbf{B}_c^{\text{lat}}$ to account for both wheels of the axle), $l_f$ and $l_r$ are the distances from the center of gravity to the front and rear axles, $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, and $v_x$ is the longitudinal velocity (assumed constant within each prediction horizon)~\cite{rajamaniVehicleDynamicsControl2005, fernandezVehicleDynamicsModel}. The entry $\mathbf{A}_c^{\text{lat}}[0,2] = v_x$ represents the kinematic coupling between heading and global lateral position, as introduced in Chapter~2.
 
-where $C_f$ and $C_r$ are the per-tire cornering stiffness coefficients (multiplied by 2 for the axle total), $L_f$ and $L_r$ are the distances from the center of gravity to the front and rear axles, $m$ is the vehicle mass, $I_z$ is the yaw moment of inertia, and $v_x$ is the longitudinal velocity (assumed constant within each prediction horizon)~\cite{rajamani_vehicle_2005, fernandez_vehicle_nodate}. The $A_c(1,3) = v_x$ term represents the kinematic coupling between heading and global lateral position, as described in Chapter~2.
-
-As described in Section~\ref{sec:dual_model}, the implementation uses a dual-model architecture in which the Nash solver receives state feedback from the error model (Equation~\eqref{eq:Ac_error}), while the plant propagates using the body-frame model (Equation~\eqref{eq:Ac_body}). The matrices shown in Equations~\eqref{eq:Ac_bicycle}--\eqref{eq:Bc_bicycle} represent the global-frame formulation used for the theoretical derivation; the controller model replaces the kinematic coupling terms with force-coupling terms as detailed in Section~\ref{sec:dual_model}.
-
-Discretization is performed using the matrix exponential method~\cite{rajamani_vehicle_2005}:
+The additional terms $-(1 - f_v) k_{\dot{y}}$ in $\mathbf{A}_c^{\text{lat}}[1,1]$ and $-(1 - f_v) k_{\dot{\psi}}$ in $\mathbf{A}_c^{\text{lat}}[3,3]$ are low-speed damping corrections that prevent the linearized tire model from becoming ill-conditioned at small $v_x$, where the analytic slip stiffness diverges as $1/v_x$. Here $k_{\dot{y}} = \mu_t \, g / 0.5$ and $k_{\dot{\psi}} = \mu_t \, m \, g \, L / (4 \, I_z \, 0.3)$ are the friction-based damping gains, with $\mu_t$ the tire--road friction coefficient, $g$ the gravitational acceleration, and $L = l_f + l_r$ the wheelbase. The smooth-switching factor
 \begin{equation}
-\begin{bmatrix} \mathbf{A}_{\text{lat}} & \mathbf{B}_{\text{lat}} \\ \mathbf{0} & \mathbf{I} \end{bmatrix}
-= \exp\!\left( \begin{bmatrix} \mathbf{A}_c & \mathbf{B}_c \\ \mathbf{0} & \mathbf{0} \end{bmatrix} T_s \right)
-\label{eq:zoh_discretization}
+f_v = \tfrac{1}{2}\left( \tanh(10 \, v_x - 8) + 1 \right)
+\label{eq:fv_switch}
 \end{equation}
-
-The output matrix selects the lateral position and heading angle:
-\begin{equation}
-\mathbf{C}_{\text{lat}} = \begin{bmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & 1 & 0 \end{bmatrix}
-\label{eq:C_lateral}
-\end{equation}
-
-yielding $\mathbf{z} = [y, \psi]^T$ with $n_x = 4$ states and $n_z = 2$ outputs. As in the longitudinal case, both players apply steering to the same vehicle: $\mathbf{B}_1 = \mathbf{B}_2 = \mathbf{B}_{\text{lat}}$.
+transitions monotonically from $f_v \approx 0$ at $v_x = 0$ to $f_v \approx 1$ for $v_x \gtrsim 1\,\mathrm{m/s}$, so that the damping correction is active only during starts and low-speed maneuvers and vanishes at the platoon cruising speed. This formulation keeps the state-space model well-conditioned across the full operating range without introducing a discontinuous switch.
 
 The vehicle parameters used in the bicycle model are summarized in Table~\ref{tab:vehicle_params}.
 
@@ -2138,36 +2135,54 @@ The vehicle parameters used in the bicycle model are summarized in Table~\ref{ta
 \hline
 \textbf{Parameter} & \textbf{Symbol} & \textbf{Value} \\
 \hline
-Vehicle mass (kerb) & $m$ & 1305 kg \\
-Yaw moment of inertia & $I_z$ & 2500 kg$\cdot$m$^2$ \\
-Wheelbase & $L$ & 2.505 m \\
-CG to front axle & $L_f$ & 1.2525 m \\
-CG to rear axle & $L_r$ & 1.2525 m \\
-Front cornering stiffness (per tire) & $C_f$ & 55,000 N/rad \\
-Rear cornering stiffness (per tire) & $C_r$ & 55,000 N/rad \\
-Nominal longitudinal velocity & $v_x$ & 20 m/s \\
+Vehicle mass (kerb) & $m$ & $1305\,\mathrm{kg}$ \\
+Yaw moment of inertia & $I_z$ & $2500\,\mathrm{kg \cdot m^2}$ \\
+Wheelbase & $L$ & $2.505\,\mathrm{m}$ \\
+CG to front axle & $l_f$ & $1.2525\,\mathrm{m}$ \\
+CG to rear axle & $l_r$ & $1.2525\,\mathrm{m}$ \\
+Front cornering stiffness (per tyre) & $C_{af}$ & $36{,}500\,\mathrm{N/rad}$ \\
+Rear cornering stiffness (per tyre)  & $C_{ar}$ & $22{,}300\,\mathrm{N/rad}$ \\
+Tyre--road friction coefficient & $\mu_t$ & $0.9$ \\
+Nominal longitudinal velocity & $v_x$ & $20\,\mathrm{m/s}$ \\
 \hline
 \end{tabular}
-\caption{Vehicle parameters for the bicycle model (Audi TT Coupé, see Table~\ref{tab:vehicle_params_ch2})}
+\caption{Vehicle parameters for the bicycle model (Audi TT Coup\'{e}, see Table~\ref{tab:vehicle_params_ch2})}
 \label{tab:vehicle_params}
 \end{table}
 
+Discretization of the lateral model uses the same augmented matrix exponential as the longitudinal channel (Eq.~\eqref{eq:long_zoh}), applied with $T_s = T_{\text{lat}} = 0.05\,\mathrm{s}$:
+\begin{equation}
+\begin{bmatrix} \mathbf{A}^{\text{lat}} & \mathbf{B}^{\text{lat}} \\ \mathbf{0} & \mathbf{1} \end{bmatrix}
+= \exp\!\left( \begin{bmatrix} \mathbf{A}_c^{\text{lat}} & \mathbf{B}_c^{\text{lat}} \\ \mathbf{0} & 0 \end{bmatrix} T_s \right)
+\label{eq:zoh_discretization}
+\end{equation}
+The output matrix selects the lateral position and heading:
+\begin{equation}
+\mathbf{C}^{\text{lat}} = \begin{bmatrix} 1 & 0 & 0 & 0 \\ 0 & 0 & 1 & 0 \end{bmatrix}
+\label{eq:C_lateral}
+\end{equation}
+yielding $\mathbf{z} = [y, \psi]^{\top}$ with $n_x = 4$ states and $n_z = 2$ outputs. As in the longitudinal case, both players apply steering to the same vehicle, so $\mathbf{B}_1 = \mathbf{B}_2 = \mathbf{B}^{\text{lat}}$.
+
+\subsection{Runtime Re-Linearization}
+\label{sec:relinearization}
+
+Because both $\mathbf{A}_c^{\text{long}}$ and $\mathbf{A}_c^{\text{lat}}$ depend on the current longitudinal speed $v_x$, the linearization is refreshed at runtime whenever $v_x$ drifts by more than a threshold. The longitudinal solver rebuilds its matrices when $|v_x - v_x^{\text{cached}}| > 2.0\,\mathrm{m/s}$, and the lateral solver rebuilds on every Nash tick because the Coriolis-like $v_x$ terms in $\mathbf{A}_c^{\text{lat}}$ have a stronger sensitivity to speed. Each rebuild calls the vehicle's analytic Jacobian, re-discretizes via Eq.~\eqref{eq:long_zoh}/\eqref{eq:zoh_discretization}, and re-factorizes the OSQP problems at all pre-computed $\lambda$ levels.
+
 \subsection{Multi-Step Prediction and Compact Form}
 
-For both domains, the system output over the prediction horizon $N_p$ is written in compact form as:
+For each channel, the system output over the prediction horizon $N_p$ is written in compact form as:
 \begin{equation}
-\mathbf{Z}[k] = \mathbf{U} \mathbf{x}[k] + \mathbf{H} D_1 + \mathbf{H} D_2
+\mathbf{Z}[k] = \mathbf{U} \, \mathbf{x}[k] + \mathbf{H} \, D_1 + \mathbf{H} \, D_2
 \label{eq:compact_prediction}
 \end{equation}
-where $\mathbf{U} \in \mathbb{R}^{n_z N_p \times n_x}$ is the free response matrix and $\mathbf{H} \in \mathbb{R}^{n_z N_p \times N_u}$ is the forced response matrix. Since $\mathbf{B}_1 = \mathbf{B}_2$ in both domains, the forced response matrices are identical: $\mathbf{H}_1 = \mathbf{H}_2 \equiv \mathbf{H}$.
+where $\mathbf{U} \in \mathbb{R}^{n_z N_p \times n_x}$ is the free-response matrix, $\mathbf{H} \in \mathbb{R}^{n_z N_p \times N_u}$ is the forced-response matrix, and $D_1, D_2 \in \mathbb{R}^{N_u}$ are the stacked control sequences of Player~1 and Player~2 over the control horizon $N_u$. Since $\mathbf{B}_1 = \mathbf{B}_2$ in both channels, the forced-response matrices coincide: $\mathbf{H}_1 = \mathbf{H}_2 \equiv \mathbf{H}$.
 
-The free response matrix is:
+The free-response matrix has the block form:
 \begin{equation}
 \mathbf{U} = \begin{bmatrix} \mathbf{C} \mathbf{A} \\ \mathbf{C} \mathbf{A}^2 \\ \vdots \\ \mathbf{C} \mathbf{A}^{N_p} \end{bmatrix}
 \label{eq:U_matrix}
 \end{equation}
-
-The forced response matrix $\mathbf{H}$ has a lower-triangular Toeplitz structure:
+and the forced-response matrix has a lower-triangular Toeplitz structure:
 \begin{equation}
 \mathbf{H} = \begin{bmatrix}
 \mathbf{C} \mathbf{B} & \mathbf{0} & \cdots & \mathbf{0} \\
@@ -2177,538 +2192,608 @@ The forced response matrix $\mathbf{H}$ has a lower-triangular Toeplitz structur
 \end{bmatrix}
 \label{eq:H_matrix}
 \end{equation}
+Both channels use $N_p = 20$ prediction steps and $N_u = 10$ control steps. The dimensions of $\mathbf{U}$ and $\mathbf{H}$ therefore differ between channels only through the state and output sizes ($n_x = n_z = 2$ for the longitudinal channel; $n_x = 4$, $n_z = 2$ for the lateral channel). The algebraic structure of Equations~\eqref{eq:U_matrix}--\eqref{eq:H_matrix} is otherwise identical.
 
-The dimensions of $\mathbf{U}$ and $\mathbf{H}$ differ between the two domains due to different state and output dimensions (longitudinal: $n_x = n_z = 2$; lateral: $n_x = 4$, $n_z = 2$), but the algebraic structure is identical.
-
-% ===================================================================
+%====================================================================
 \section{Cost Function Formulation}
 \label{sec:cost_functions}
-% ===================================================================
+%====================================================================
+This section develops the quadratic cost functions that define the Nash game of Section~\ref{sec:nash_formulation}. The presentation focuses on three items that belong to the theoretical formulation of the game: the structure of the two players' costs, the authority mapping that links the allocator output to the human's tracking weight, and the horizon shaping applied to the tracking term. The runtime adaptation of the cost weights (synchronization-based, activity-based, and conflict-based mechanisms), the lane-boundary tracking-weight adaptation in the following phase, and the online driver model calibration are integration-level mechanisms and are developed in Section~\ref{sec:nash_integration} of Chapter~3.
 
-\subsection{General Quadratic Cost Structure with Cross-Coupling}
+\subsection{Quadratic Cost Structure}
+\label{sec:cost_quadratic}
 
-Following Li et al.~\cite{li_shared_2019}, each player minimizes a quadratic cost over the prediction horizon that includes cross-coupling terms penalizing the other player's control effort:
+Following the framework of Li et al.~\cite{liSharedControlNovel2019} as reformulated by Pustilnik and Borrelli~\cite{pustilnikGeneralizedNashEquilibrium2025}, each player minimizes a finite-horizon quadratic cost that penalizes tracking error and own control effort. Each player carries its own tracking-weight matrix ($Q_1$ for the system, $Q_2[k]$ for the human) and its own effort weight ($R_1$ and $R_2$):
 \begin{align}
-J_1 &= \sum_{j=0}^{N_p-1} \| \mathbf{e}_1[k+j] \|_{Q_1}^2 + \sum_{j=0}^{N_u-1} \left( R_1 \, u_1[k+j]^2 + S_1 \, u_2[k+j]^2 \right) \label{eq:cost_player1}\\
-J_2 &= \sum_{j=0}^{N_p-1} \| \mathbf{e}_2[k+j] \|_{Q_2(\lambda)}^2 + \sum_{j=0}^{N_u-1} \left( R_2 \, u_2[k+j]^2 + S_2 \, u_1[k+j]^2 \right) \label{eq:cost_player2}
+J_1(D_1, D_2) &= \sum_{j=0}^{N_p-1} \| \mathbf{e}_1[k+j] \|_{Q_1[j]}^{2} + \sum_{j=0}^{N_u-1} R_1 \, u_1[k+j]^2 \label{eq:cost_player1}\\
+J_2(D_1, D_2) &= \sum_{j=0}^{N_p-1} \| \mathbf{e}_2[k+j] \|_{Q_2[k, j]}^{2} + \sum_{j=0}^{N_u-1} R_2 \, u_2[k+j]^2 \label{eq:cost_player2}
 \end{align}
-where $\mathbf{e}_i[k+j] = \mathbf{r}_i[k+j] - \mathbf{z}[k+j]$ is the tracking error for player $i$, $Q_i$ is the output tracking weight matrix, $R_i$ is the own control effort weight, and $S_i$ is the cross-coupling weight penalizing the other player's control effort.
+where $\mathbf{e}_i[k+j] = \mathbf{r}_i[k+j] - \mathbf{z}[k+j]$ is the tracking error of player $i$ at prediction step $j$, $\mathbf{z}[k+j]$ is the predicted output at step $j$ under the joint control $u_1[k+j] + u_2[k+j]$, $Q_1[j]$ and $Q_2[k, j]$ are the horizon-indexed tracking weights of Player~1 and Player~2 respectively, and $R_1, R_2 > 0$ are the corresponding scalar effort penalties. Both players observe the same predicted output $\mathbf{z}[k+j]$, because both actuate the same physical signal (gap and velocity for the longitudinal channel; lateral position and heading for the lateral channel), and each player measures the deviation against its own reference $\mathbf{r}_i[k+j]$.
 
-The authority ratio $\lambda$ enters through Player~2's tracking weight:
+The implementation does not include cross-coupling weight matrices $S_1, S_2$ that would penalize each player for the other player's control effort. The coordination between the two players arises entirely from the authority mapping developed in Section~\ref{sec:pustilnik_mapping}, together with the additive combination $u_{\text{shared}}[k] = u_1^{*}[k] + u_2^{*}[k]$ defined in Eq.~\eqref{eq:shared_control_ch4}.
+
+\subsection{Pustilnik--Borrelli Authority Mapping}
+\label{sec:pustilnik_mapping}
+
+The authority ratio $\lambda[k]$ produced by the allocator (Section~\ref{sec:authority_allocation}) enters the game through the human's tracking weight. Rather than the direct proportionality $Q_2 \propto \lambda$ used by Li et al.~\cite{liSharedControlNovel2019}, the implementation adopts the Pustilnik--Borrelli mapping~\cite{pustilnikGeneralizedNashEquilibrium2025}:
 \begin{equation}
-Q_2(\lambda[k]) = \lambda[k] \cdot Q_1
-\label{eq:Q2_coupling}
+Q_2[k, j] = \alpha[k] \, Q_1[j], \qquad \alpha[k] = \frac{1}{1 + \lambda[k]}
+\label{eq:pustilnik_alpha}
 \end{equation}
+where $\alpha[k] \in (0, 1]$ is the scaling factor applied to Player~2's tracking weight at cycle $k$ and $\lambda[k] \in [\lambda_{\min}, \lambda_{\max}]$ is the authority ratio from the allocator. The mapping is bounded and monotonically decreasing: $\alpha \to 1$ as $\lambda \to 0$, and $\alpha \to 0$ as $\lambda \to \infty$. For the longitudinal channel $\lambda \in [0.1, 50]$, so $\alpha \in [0.0196, 0.909]$; for the lateral channel $\lambda \in [0.1, 10]$, so $\alpha \in [0.091, 0.909]$.
 
-When $\lambda$ is low (safe conditions), Player~2's tracking penalty is small, giving the human more freedom. When $\lambda$ is high (dangerous conditions), Player~2 is strongly penalized for deviating from their reference~\cite{li_shared_2019}.
-
-\subsection{Longitudinal Cost Function Weights}
-
-For the longitudinal controller, the output weight matrix tracks gap position and velocity:
-\begin{equation}
-Q_{1}^{\text{long}} = \begin{bmatrix} Q_{1,p} & 0 \\ 0 & Q_{1,v} \end{bmatrix} = \begin{bmatrix} 2500 & 0 \\ 0 & 50 \end{bmatrix}
-\label{eq:Q1_long}
-\end{equation}
-
-The position-tracking weight $Q_{1,p} = 2500$ is substantially higher than the velocity-tracking weight $Q_{1,v} = 50$, thereby implementing a position-dominant tuning strategy. In platoon merging, the primary objective is to close the gap to the correct position, and velocity matching follows naturally. The control effort weights are:
-\begin{equation}
-R_1^{\text{long}} = R_2^{\text{long}} = S_1^{\text{long}} = S_2^{\text{long}} = 800
-\label{eq:RS_long}
-\end{equation}
-
-\subsection{Lateral Cost Function Weights}
-
-For the lateral controller, the output weight matrix tracks lateral position and heading angle:
-\begin{equation}
-Q_{1}^{\text{lat}} = \begin{bmatrix} Q_{1,y} & 0 \\ 0 & Q_{1,\psi} \end{bmatrix} = \begin{bmatrix} 10 & 0 \\ 0 & 10{,}000 \end{bmatrix}
-\label{eq:Q1_lat}
-\end{equation}
-
-The heading weight $Q_{1,\psi} = 10{,}000$ is three orders of magnitude larger than the lateral position weight $Q_{1,y} = 10$. This heading-dominant tuning reflects a fundamental principle: the vehicle must first stabilize its heading angle before correcting its lateral position. An unstable heading during a lane change results in dangerous oscillations, whereas a slightly longer lateral correction is acceptable.
-
-The control effort weights for the lateral controller are:
-\begin{equation}
-R_1^{\text{lat}} = R_2^{\text{lat}} = S_1^{\text{lat}} = S_2^{\text{lat}} = 50{,}000
-\label{eq:RS_lat}
-\end{equation}
-
-These weights are substantially larger than the longitudinal weights ($R^{\text{long}} = 800$) because the control input is a steering angle (radians, typically $|\delta| \sim 0.01$~rad) rather than acceleration (m/s$^2$, typically $|u| \sim 1$--$2$~m/s$^2$). The $R/Q_y$ ratio of $5{,}000$ ensures realistic, small steering corrections that satisfy passenger comfort constraints~\cite{rajamani_vehicle_2005}. Notably, the $S = R$ cooperation principle applies identically to the lateral domain, as discussed in Section~\ref{sec:cooperation_principle}.
-
-\subsection{Scale Separation Between Domains}
-
-The difference in weight magnitudes between the longitudinal and lateral controllers arises from the physical scales of the respective control inputs. For the longitudinal domain, typical accelerations are $\sim 2$~m/s$^2$, while for the lateral domain, typical steering angles are $\sim 0.01$~rad ($\approx \SI{0.6}{\degree}$). The lateral control effort weight $R^{\text{lat}} = 50{,}000$ compared to $R^{\text{long}} = 800$ yields a ratio of approximately 62.5. This ratio, combined with the heading-dominant $Q$ matrix ($Q_\psi = 10{,}000$), ensures that the lateral steering corrections remain physically realistic despite the different input scales between the two domains.
-
-Direct copying of weight values between domains without this scaling would produce either negligible control effort (if longitudinal weights were used for lateral) or excessive, saturating control (if lateral weights were used for longitudinal).
-
-\subsection{The \texorpdfstring{$S = R$}{S = R} Cooperation Principle}
-\label{sec:cooperation_principle}
-
-A fundamental insight of this research is that the cross-coupling weights $S_i$ determine the nature of the Nash equilibrium. In the stacked QP formulation (Section~\ref{sec:solution_algorithm}), the cross-coupling weights appear in the diagonal blocks of the Hessian:
-\begin{align}
-\mathbf{P}_{11} &= \mathbf{H}^T \bar{Q}_1 \mathbf{H} + (R_1 + S_2) \mathbf{I}_{N_u} \label{eq:P11}\\
-\mathbf{P}_{22} &= \lambda \, \mathbf{H}^T \bar{Q}_1 \mathbf{H} + (R_2 + S_1) \mathbf{I}_{N_u} \label{eq:P22}
-\end{align}
-
-Setting $S_i = R_i$ produces a symmetric penalty structure where each player equally penalizes both its own and the other's control effort:
+Two limiting regimes characterize the effect of $\alpha$ on the Nash equilibrium:
 \begin{itemize}
-\item When $S < R$: each player weighs its own control cost more heavily, leading to \textit{competitive} behavior where both controllers fight each other.
-\item When $S = R$: both costs are equally weighted, yielding a \textit{cooperative} equilibrium where both controllers converge smoothly.
-\item When $S > R$: each player over-prioritizes the other's cost, leading to overly deferential behavior.
+\item \textbf{Safe conditions} ($\lambda \to 0$, $\alpha \to 1$). $Q_2[k, j] \to Q_1[j]$, so the human's tracking weight equals the system's. Each player minimizes the deviation from its own reference under equal tracking pressure. The equilibrium input $u_2^{*}[k]$ tracks $\mathbf{r}_2$ freely, and the driver retains full authority over the actuator.
+\item \textbf{Dangerous conditions} ($\lambda \gg 1$, $\alpha \to 0$). $Q_2[k, j] \to 0$, so the human's tracking cost vanishes. Player~2's cost reduces to $J_2 \to \sum_j R_2 \, u_2^2$, which is minimized at $u_2^{*}[k] = 0$ (subject to any active input-rate constraints). The shared control $u_{\text{shared}}[k] = u_1^{*}[k] + u_2^{*}[k]$ therefore collapses onto $u_1^{*}[k]$, and the system takes full authority.
 \end{itemize}
 
-\paragraph{Longitudinal implementation.} The $S = R$ principle is applied directly: $R_1 = R_2 = S_1 = S_2 = 800$.
+The Pustilnik--Borrelli mapping guarantees that Player~2's Hessian remains positive definite for every $\lambda \geq 0$: from Eq.~\eqref{eq:cost_player2} and the compact prediction of Section~\ref{sec:dmpc}, Player~2's quadratic form is $2 \alpha \, \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} + 2 R_2 \, \mathbf{I}_{N_u} \succ 0$ for any $\alpha > 0$ and $R_2 > 0$. Positive-definiteness is preserved as $\lambda \to \infty$ ($\alpha \to 0$), because the $R_2 \mathbf{I}$ term does not vanish. The alternative mapping $Q_2 \propto \lambda$ would produce a Hessian $2 \lambda \, \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} + 2 R_2 \, \mathbf{I}_{N_u}$ whose condition number grows without bound as $\lambda$ increases, degrading the numerical stability of the solver at high risk levels.
 
-\paragraph{Lateral implementation.} The $S = R$ principle is applied directly: $R_1 = R_2 = S_1 = S_2 = 50{,}000$. Early experiments with $S = 0.2 R$ produced insufficient cross-coupling, causing the two controllers to compete rather than cooperate during lane changes. Setting $S = R$ resolved the oscillations once the heading-dominant tuning ($Q_\psi = 10{,}000 \gg Q_y = 10$) was established. The heading-dominant weighting ensures that the vehicle first stabilizes its heading before correcting its lateral position, which provides the stability margin needed for the $S = R$ ratio to produce smooth convergence. This confirms that the $S = R$ cooperation principle is \textbf{universal}: it applies to both the double-integrator longitudinal model and the bicycle-model lateral dynamics without modification.
+\subsection{Horizon Weighting and Terminal Weight}
+\label{sec:horizon_weighting}
 
-\subsection{Driver-Type Modifiers (Lateral Controller)}
-\label{sec:driver_type}
+The tracking-weight sequence $Q_1[j]$ that appears in Eqs.~\eqref{eq:cost_player1}--\eqref{eq:cost_player2} is not held constant along the prediction horizon. Two mechanisms shape the horizon profile.
 
-Following Li et al.~\cite{li_shared_2019}, the lateral controller supports three driver types by modifying Player~2's cost function weights. The modifiers are applied to the base values $R_2^{\text{lat}}$, $S_2^{\text{lat}}$, and $Q_{1,y}^{\text{lat}}$:
+\paragraph{Linear ramp on the running weight.} Following Flad et al.~\cite{fladCooperativeSharedControl2017}, the running tracking weight is scaled by a linear ramp that increases from $1 \times$ at $j = 0$ to $w_Q \times$ at $j = N_p - 2$:
+\begin{equation}
+Q_1[j] = s_j \, Q_1^{\text{nom}}, \qquad s_j = 1 + \frac{j}{N_p - 1} \left( w_Q - 1 \right), \quad j = 0, 1, \ldots, N_p - 2
+\label{eq:horizon_ramp}
+\end{equation}
+where $Q_1^{\text{nom}}$ is the nominal in-lane tracking weight (defined per channel in Sections~\ref{sec:long_weights}--\ref{sec:lat_weights}), $s_j$ is the horizon scaling coefficient at step $j$, and $w_Q > 1$ is the channel-specific ramp coefficient. The ramp gives progressively more weight to deviations that persist further into the future, so that the solver treats a transient overshoot near the current step less aggressively than a sustained error at the end of the horizon.
 
-\begin{table}[ht]
-\centering
-\begin{tabular}{|l|c|c|c|}
-\hline
-\textbf{Driver Type} & \textbf{$R_2$ Factor} & \textbf{$S_2$ Factor} & \textbf{$Q_y$ Factor} \\
-\hline
-Cautious   & 1.5 & 1.5 & 0.8 \\
-Normal     & 1.0 & 1.0 & 1.0 \\
-Aggressive & 0.6 & 0.6 & 1.3 \\
-\hline
-\end{tabular}
-\caption{Driver-type modifiers for lateral Nash game weights}
-\label{tab:driver_types}
-\end{table}
+\paragraph{Terminal weight.} At the final horizon step $j = N_p - 1$, the ramped $Q_1[j]$ is replaced by a distinct terminal weight $Q_{1,T}$:
+\begin{equation}
+Q_1[N_p - 1] = Q_{1,T}
+\label{eq:terminal_weight}
+\end{equation}
+where $Q_{1,T}$ has substantially larger entries than $Q_1^{\text{nom}}$ (roughly one order of magnitude, as specified per channel below). The terminal weight approximates a control-Lyapunov terminal cost that enforces state-space closure at the end of the horizon and improves the receding-horizon stability of the closed loop.
 
-A cautious driver has a higher $R_2$ (prefers gentle control), a higher $S_2$ (is more cooperative with the system), and a lower $Q_y$ (exhibits less aggressive position tracking). An aggressive driver has a lower $R_2$ (willingness to use large steering inputs), a lower $S_2$ (cooperativeness), and a higher $Q_y$ (demanding faster lane changes). These modifiers are not applied in the longitudinal controller, where driver behavior is modeled differently through the human reference trajectory.
+The ramp coefficient is $w_Q = 2.0$ for the longitudinal channel and $w_Q = 1.5$ for the lateral channel. The longitudinal channel uses the larger ramp because gap errors near the two-second horizon end remain physically meaningful for merge planning, whereas lateral errors decay faster under the shorter time step and require less far-horizon emphasis.
+
+\subsection{Longitudinal Channel Weights}
+\label{sec:long_weights}
+
+The nominal tracking weight matrix for the longitudinal controller is:
+\begin{equation}
+Q_1^{\text{nom, long}} = \begin{bmatrix} Q_p & 0 \\ 0 & Q_v \end{bmatrix} = \begin{bmatrix} 5000 & 0 \\ 0 & 1500 \end{bmatrix}, \qquad
+Q_{1,T}^{\text{long}} = \begin{bmatrix} 50000 & 0 \\ 0 & 6000 \end{bmatrix}
+\label{eq:Q1_long}
+\end{equation}
+where $Q_p$ is the position (gap) tracking weight, $Q_v$ is the velocity tracking weight, and $Q_{1,T}^{\text{long}}$ is the terminal state weight applied at $j = N_p - 1$. The position weight exceeds the velocity weight because the primary tracking objective during platoon merging is gap closure; velocity matching then follows through the constant-time-gap reference of Section~\ref{sec:reference_generation}. The terminal weights are ten and four times the corresponding nominal values, respectively, so that the solver commits to a specific end-of-horizon platoon state rather than trading off gap and velocity errors at the terminal step.
+
+The effort penalties are:
+\begin{equation}
+R_1^{\text{long}} = 75000, \qquad R_2^{\text{long}}[k] \in [40000, 120000]
+\label{eq:R_long}
+\end{equation}
+where $R_1^{\text{long}}$ is the system's effort penalty (held constant) and $R_2^{\text{long}}[k]$ is the human's effort penalty, which is adapted online by the mechanism of Section~\ref{sec:nash_r2} between $R_{2,\text{follow}}^{\text{long}} = 40000$ and $R_{2,\text{start}}^{\text{long}} = 120000$. The choice $R_{2,\text{follow}}^{\text{long}} < R_1^{\text{long}}$ means that once the ego has synchronized to the platoon, the human's effort is penalized less than the system's, granting the driver higher steady-state authority~\cite{naTwoNashequilibriumbasedSteering2022}. The ratio $Q_v / R_1^{\text{long}} \approx 0.02$ reproduces the Pareto-optimal single-player tuning identified in preliminary open-loop simulation.
+
+\subsection{Lateral Channel Weights}
+\label{sec:lat_weights}
+
+The nominal tracking weight matrix for the lateral controller is:
+\begin{equation}
+Q_1^{\text{nom, lat}} = \begin{bmatrix} Q_y & 0 \\ 0 & Q_\psi \end{bmatrix} = \begin{bmatrix} 5000 & 0 \\ 0 & 2000 \end{bmatrix}, \qquad
+Q_{1,T}^{\text{lat}} = \begin{bmatrix} 20000 & 0 \\ 0 & 8000 \end{bmatrix}
+\label{eq:Q1_lat}
+\end{equation}
+where $Q_y$ is the lateral position tracking weight, $Q_\psi$ is the heading tracking weight, and $Q_{1,T}^{\text{lat}}$ is the corresponding terminal weight. The ratio $Q_\psi / Q_y = 0.4$ was tuned so that a heading error of $0.1\,\mathrm{rad}$ carries a cost comparable to a lateral offset of $0.3\,\mathrm{m}$; larger heading weights caused the solver to over-correct heading aggressively during lane changes, producing steering oscillation. In the following phase these nominal values are further adapted to the lane-boundary encroachment fraction, as developed in Section~\ref{sec:nash_q1}.
+
+The nominal effort penalties are:
+\begin{equation}
+R_1^{\text{lat, nom}} = R_2^{\text{lat, nom}} = 250000
+\label{eq:R_lat_nominal}
+\end{equation}
+where both weights are set equally at $250000$ to keep steering commands smooth under the wide operating envelope. During the \textsc{GapSearch} phase the maneuver goal is heading regulation $\psi \to 0$ rather than lateral displacement, and a large entry heading (up to $25^\circ$ following a driver-initiated deviation before the merge is armed) requires strong corrective steering. The nominal effort weights are therefore temporarily reduced to
+\begin{equation}
+R_1^{\text{lat, GS}} = R_2^{\text{lat, GS}} = 25000
+\label{eq:R_lat_gs}
+\end{equation}
+during \textsc{GapSearch}, which lets the solver produce steering angles up to $\delta \approx -20^\circ$ where the nominal weights would produce only $\delta \approx -2^\circ$. The nominal values are restored on the transition from \textsc{GapSearch} to \textsc{Merge}. Beyond this phase-based override, the lateral effort penalty is further adapted online by the synchronization, activity, and conflict mechanisms of Section~\ref{sec:nash_r2}.
+
+The lateral effort weights of $2.5 \times 10^5$ are approximately three orders of magnitude larger than the longitudinal $R_1^{\text{long}} = 7.5 \times 10^4$. This ratio reflects the different physical scales of the two control inputs: longitudinal commands are typical accelerations of order $1$--$2\,\mathrm{m/s^2}$, while steering angles are typical corrections of order $0.01\,\mathrm{rad}$. The larger lateral weights keep steering commands physically realistic despite the smaller magnitude of the input.
+
+\subsection{Runtime Adaptation and Driver Modeling}
+\label{sec:cost_runtime}
+
+The values listed in Sections~\ref{sec:long_weights}--\ref{sec:lat_weights} are the nominal levels used to initialize the Nash cost matrices. During a run, four integration-level mechanisms modify these values so that the cost structure reflects the current platoon state, driver engagement, and phase context. All four are developed in the corresponding subsections of Chapter~3:
+\begin{itemize}
+\item \textbf{Adaptive $R_2$} — synchronization-based interpolation between $R_{2,\text{start}}$ and $R_{2,\text{follow}}$, activity-based scaling in response to driver input, and conflict-based boost for the lateral channel during opposing-intent events. Developed in Section~\ref{sec:nash_r2}.
+\item \textbf{Adaptive $Q_1$ in following phase} — encroachment-fraction interpolation between the nominal lateral weights and elevated boundary weights, preventing residual limit cycles near the lane center. Developed in Section~\ref{sec:nash_q1}.
+\item \textbf{Online driver model calibration} — real-time estimation of the human reference $\mathbf{r}_2$ for the longitudinal channel through IDM parameter inversion. Developed in Section~\ref{sec:nash_driver_calib}, with the reference-generation details in Section~\ref{sec:reference_generation}.
+\item \textbf{Warm-starting and re-linearization} — cross-phase continuity of the solver internal state and speed-dependent refresh of the discrete-time matrices. Developed in Section~\ref{sec:nash_warm}.
+\end{itemize}
+
+The cost formulation in this section defines only the fixed structure of the game (Eqs.~\eqref{eq:cost_player1}--\eqref{eq:cost_player2}), the Pustilnik--Borrelli mapping (Eq.~\eqref{eq:pustilnik_alpha}), the horizon shaping (Eqs.~\eqref{eq:horizon_ramp}--\eqref{eq:terminal_weight}), and the nominal per-channel weights. All time-varying refinements enter through the integration layer of Chapter~3.
 
 \subsection{Compact Matrix Representation}
+\label{sec:cost_compact}
 
-Using Eq.~\eqref{eq:compact_prediction}, the compact cost functions become:
+Using the compact prediction of Eq.~\eqref{eq:compact_prediction}, the two cost functions of Eqs.~\eqref{eq:cost_player1}--\eqref{eq:cost_player2} take the block-matrix form:
 \begin{align}
-J_1 &= \mathbf{E}_1^T \bar{Q}_1 \mathbf{E}_1 + D_1^T \bar{R}_1 D_1 + D_2^T \bar{S}_1 D_2 \label{eq:cost_matrix_1}\\
-J_2 &= \mathbf{E}_2^T \bar{Q}_2 \mathbf{E}_2 + D_2^T \bar{R}_2 D_2 + D_1^T \bar{S}_2 D_1 \label{eq:cost_matrix_2}
+J_1(D_1, D_2) &= \mathbf{E}_1^{\top} \bar{Q}_1 \mathbf{E}_1 + D_1^{\top} \bar{R}_1 D_1 \label{eq:cost_matrix_1}\\
+J_2(D_1, D_2) &= \alpha[k] \, \mathbf{E}_2^{\top} \bar{Q}_1 \mathbf{E}_2 + D_2^{\top} \bar{R}_2 D_2 \label{eq:cost_matrix_2}
 \end{align}
-where $\bar{Q}_1 = \text{diag}(Q_1, \ldots, Q_1)$, $\bar{Q}_2 = \lambda \bar{Q}_1$, $\bar{R}_i = R_i \mathbf{I}_{N_u}$, $\bar{S}_i = S_i \mathbf{I}_{N_u}$, and $\mathbf{E}_i = \mathbf{R}_i - \mathbf{U}\mathbf{x}[k] - \mathbf{H}D_1 - \mathbf{H}D_2$.
-
+where $\bar{Q}_1 = \mathrm{blkdiag}\!\left( s_0 \, Q_1^{\text{nom}}, s_1 \, Q_1^{\text{nom}}, \ldots, s_{N_p - 2} \, Q_1^{\text{nom}}, Q_{1,T} \right)$ is the block-diagonal horizon weight combining the ramp of Eq.~\eqref{eq:horizon_ramp} and the terminal weight of Eq.~\eqref{eq:terminal_weight}; $\bar{R}_i = R_i \, \mathbf{I}_{N_u}$ is the effort weight of player $i$ over the control horizon; $\mathbf{E}_i = \mathbf{R}_i - \mathbf{U} \mathbf{x}[k] - \mathbf{H} D_1 - \mathbf{H} D_2$ is the stacked tracking error of player $i$; and the scalar $\alpha[k] = 1/(1 + \lambda[k])$ implements the Pustilnik--Borrelli authority mapping of Eq.~\eqref{eq:pustilnik_alpha}. The $\alpha[k]$ factor appears as a single scalar multiplier on Player~2's tracking quadratic form, which the solver exploits by pre-factoring one OSQP instance per discrete level of $\lambda$ (Section~\ref{sec:solution_algorithm}) rather than rebuilding the Hessian at every cycle.
 % ===================================================================
 \section{Dynamic Authority Allocation}
 \label{sec:authority_allocation_}
-% ===================================================================
+%====================================================================
+The Nash game of Section~\ref{sec:nash_formulation} takes the authority ratio $\lambda[k]$ as an exogenous input at every cycle. The full definition of $\lambda[k]$ and its two-channel implementation is developed in the shared-control chapter (Section~\ref{sec:authority_allocation}), which describes the three-stage architecture common to both channels: a sigmoid on the driving-safety-field force, a Swain--Rath performance sigmoid on the normalized tracking errors, and an element-wise fusion followed by an adaptive exponential moving average. Only the parameters that make $\lambda[k]$ observable to the cost formulation are recapitulated here.
 
-The authority ratio $\lambda[k]$ dynamically adjusts the balance between system and human control based on the assessed risk level. The longitudinal and lateral controllers use different authority allocation strategies reflecting their distinct operational requirements.
-
-\subsection{Longitudinal Authority Allocation: Dual-Source with Hysteresis}
-\label{sec:long_authority}
-
-The longitudinal authority is computed from two independent sources, following the safety field framework of Wang et al.~\cite{wang_driving_2015, wang_driving_2016} as adapted by Li et al.~\cite{li_shared_2019}.
-
-\subsubsection{Safety Authority via Sigmoid Mapping}
-
-The safety field force $F_{\text{total}}[k]$ is mapped to an authority ratio through a sigmoid function:
+The longitudinal allocator produces $\lambda_{\text{long}}[k] \in [\lambda_{\min}, \lambda_{\max}] = [0.1, 50]$ from the longitudinal safety force and the gap and velocity tracking errors; the lateral allocator produces $\lambda_{\text{lat}}[k] \in [0.1, 10]$ from the lateral safety force and the lane-offset tracking error. The narrower lateral range reflects the observation that excessive system authority during a lane change produces abrupt steering corrections that reduce passenger comfort. Both channels expose their $\lambda[k]$ to the Nash cost through the Pustilnik--Borrelli mapping introduced in Eq.~\eqref{eq:pustilnik_alpha}:
 \begin{equation}
-\lambda_{\text{safety}}[k] = \lambda_{\min} + (\lambda_{\max} - \lambda_{\min}) \cdot \sigma\!\left(k_s \cdot (|F_{\text{total}}[k]| - F_{\text{mid}})\right)
-\label{eq:sigmoid_authority_long}
+\alpha[k] = \frac{1}{1 + \lambda[k]}
+\label{eq:alpha_recap}
 \end{equation}
-where $\sigma(x) = 1/(1 + e^{-x})$, $\lambda_{\min} = 0.1$, $\lambda_{\max} = 100$, $k_s = 0.015$, and $F_{\text{mid}} = 400$~N. This sigmoid mapping yields a continuously differentiable authority transition, unlike the discrete lookup table used by Li et al.~\cite{li_shared_2019}.
+where $\alpha[k] \in (0, 1]$ is the scaling factor applied to Player~2's tracking weight $Q_2[k, j] = \alpha[k] \, Q_1[j]$. The bounded, monotonically decreasing shape of Eq.~\eqref{eq:alpha_recap} together with the two-channel ranges above yields $\alpha_{\text{long}} \in [0.0196, 0.909]$ and $\alpha_{\text{lat}} \in [0.091, 0.909]$: the lateral channel never reaches the near-zero regime that transfers full authority to the system, whereas the longitudinal channel approaches it under high-risk conditions. This is consistent with the intended operational split: the longitudinal system can take near-full authority during an imminent collision, while the lateral system retains enough human contribution to preserve steering handover continuity.
 
-\subsubsection{Performance Authority with Hysteresis}
-
-A performance-based authority addresses situations in which the gap error is large but the safety force is small (e.g., during initial gap closure). A hysteresis mechanism prevents oscillations at the mode boundary:
-\begin{equation}
-\text{Enter performance mode:} \quad |e_{\text{gap}}[k]| > d_{\text{enter}} = 3.0 \text{ m}
-\label{eq:hysteresis_enter}
-\end{equation}
-\begin{equation}
-\text{Exit performance mode:} \quad |e_{\text{gap}}[k]| < d_{\text{exit}} = 1.0 \text{ m}
-\label{eq:hysteresis_exit}
-\end{equation}
-
-When in performance mode, the authority is computed as:
-\begin{equation}
-\lambda_{\text{perf}}[k] = 1.0 + 0.3 \bar{e} + 0.25 (|e_{\text{gap}}| - d_{\text{exit}})
-\label{eq:perf_authority}
-\end{equation}
-where $\bar{e} = \max(0, (|e_{\text{gap}}| - d_{\text{exit}}) / (d_{\text{enter}} - d_{\text{exit}}))$. An asymmetry factor of $1.3$ is applied when $e_{\text{gap}} > 0$ (catching up is more urgent). The performance authority is bounded by $\lambda_{\text{perf}} \leq 50$.
-
-\subsubsection{Fusion and Adaptive Smoothing}
-
-The target authority is the maximum of the two sources:
-\begin{equation}
-\lambda_{\text{target}}[k] = \max\!\left(\lambda_{\text{safety}}[k], \, \lambda_{\text{perf}}[k]\right)
-\label{eq:lambda_fusion}
-\end{equation}
-
-Smoothing uses an adaptive exponential moving average (EMA):
-\begin{equation}
-\lambda[k] = \alpha_\lambda \cdot \lambda_{\text{target}}[k] + (1 - \alpha_\lambda) \cdot \lambda[k-1]
-\label{eq:lambda_smooth_long}
-\end{equation}
-where $\alpha_\lambda$ adapts based on the gap error:
-\begin{equation}
-\alpha_\lambda = \begin{cases}
-0.12 & |e_{\text{gap}}| > 5.0 \text{ m} \\
-0.05 + 0.07 \cdot \frac{|e_{\text{gap}}| - 2.0}{3.0} & 2.0 < |e_{\text{gap}}| \leq 5.0 \\
-0.05 & |e_{\text{gap}}| \leq 2.0
-\end{cases}
-\label{eq:adaptive_alpha_long}
-\end{equation}
-
-\subsection{Lateral Authority Allocation: Sigmoid with Rate Limiting}
-\label{sec:lat_authority}
-
-The lateral authority allocator uses a simpler single-source design, as the lateral safety field force alone provides sufficient risk assessment during lane changes.
-
-\subsubsection{Sigmoid Mapping}
-
-The lateral safety force is mapped similarly to the longitudinal case, but with different parameters reflecting the lower force magnitudes typical of lateral interactions~\cite{wang_driving_2016, song_vehicle_2013}:
-\begin{equation}
-\lambda_{\text{lat}}[k] = \lambda_{\min} + (\lambda_{\max} - \lambda_{\min}) \cdot \sigma\!\left(k_s \cdot (|F_{\text{lat}}[k]| - F_{\text{mid}})\right)
-\label{eq:sigmoid_authority_lat}
-\end{equation}
-with $\lambda_{\min} = 0.1$, $\lambda_{\max} = 10$, $k_s = 0.02$, and $F_{\text{mid}} = 150$~N.
-
-The lateral authority range ($\lambda \in [0.1, 10]$) is narrower than the longitudinal range ($\lambda \in [0.1, 100]$) because excessive system authority during lane changes can produce abrupt steering corrections that compromise passenger comfort.
-
-\subsubsection{Smoothing and Rate Limiting}
-
-The lateral authority uses a first-order low-pass filter followed by rate limiting:
-\begin{equation}
-\hat{\lambda}[k] = \alpha_\lambda \cdot \lambda_{\text{target}}[k] + (1 - \alpha_\lambda) \cdot \lambda[k-1]
-\label{eq:lateral_lpf}
-\end{equation}
-with $\alpha_\lambda = 0.02$ (very slow smoothing for comfort). The rate is then limited:
-\begin{equation}
-\lambda[k] = \lambda[k-1] + \text{clip}\!\left(\hat{\lambda}[k] - \lambda[k-1], \; -\Delta\lambda_{\text{down}}, \; \Delta\lambda_{\text{up}}\right)
-\label{eq:lateral_rate_limit}
-\end{equation}
-where $\Delta\lambda_{\text{up}} = 0.02$ per step and $\Delta\lambda_{\text{down}} = 0.01$ per step. The asymmetric rate-limiting (slower release than engagement) ensures that the system does not relinquish authority prematurely following a risk event. At $T_s = 0.01$~s (lateral simulation rate), reaching maximum authority from minimum requires approximately 5 seconds.
-
-\subsection{Conversion to Control Authority}
-
-For both controllers, the shared control uses:
-\begin{equation}
-\alpha[k] = \frac{\lambda[k]}{1 + \lambda[k]}, \quad
-u_{\text{shared}}[k] = \alpha[k] \cdot u_1^*[k] + (1 - \alpha[k]) \cdot u_2^*[k]
-\label{eq:alpha_shared}
-\end{equation}
+The remaining implementation details (per-channel sigmoid parameters $\lambda_{\min}$, $\lambda_{\max}$, $F_{\text{mid}}$, $k_s$, the tracking-error normalization bounds, the adaptive EMA coefficients, the phase-specific caps applied in \textsc{Following}, and the no-leader branch) are given in Section~\ref{sec:authority_allocation}. The pre-computed $\lambda$-level grid used by the solver to avoid rebuilding the Hessian at every cycle is developed in Section~\ref{sec:solution_algorithm}.
 
 % ===================================================================
-\section{Nash Equilibrium Solution via Stacked QP}
+\section{Nash Equilibrium Solution via Iterative Best Response}
 \label{sec:solution_algorithm}
 % ===================================================================
 
-\subsection{From Best-Response to Stacked QP}
+The Nash equilibrium of the two coupled quadratic programs defined in Section~\ref{sec:cost_functions} is computed at every cycle by an Iterative Best Response (IBR) loop. Each iteration alternates between two smaller Quadratic Programs, one for each player, in which the other player's control sequence is held fixed. Convergence of the IBR loop to a Nash equilibrium follows from the strict convexity of the two per-player QPs, which is guaranteed by the positive-definite structure of the Hessians developed in Section~\ref{sec:pustilnik_mapping}.
 
-The Nash equilibrium can be derived through the best-response approach. Taking the gradient of $J_1$ with respect to $D_1$ and setting to zero:
+\subsection{Best-Response Quadratic Programs}
+\label{sec:best_response_qp}
+
+At iteration $\iota$ of cycle $k$, Player~1 solves for its stacked control sequence $D_1 \in \mathbb{R}^{N_u}$ while Player~2's sequence $D_2^{(\iota-1)}$ from the previous iteration is held fixed:
 \begin{equation}
-(\mathbf{H}^T \bar{Q}_1 \mathbf{H} + \bar{R}_1) D_1 = \mathbf{H}^T \bar{Q}_1 (\mathbf{e}_1^{\text{free}} - \mathbf{H} D_2)
-\label{eq:best_response_1}
+D_1^{(\iota)} = \arg\min_{D_1} \; \frac{1}{2} D_1^{\top} P_1 \, D_1 + q_1(D_2^{(\iota-1)})^{\top} D_1
+\quad \text{s.t.} \quad C D_1 \in [l_1, u_1]
+\label{eq:qp_player1}
 \end{equation}
+where $P_1 = 2 \left( \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} + R_1 \, \mathbf{I}_{N_u} \right)$ is the Player~1 Hessian, $q_1(D_2) = -2 \left( \mathbf{H}^{\top} \bar{Q}_1 \, \mathbf{e}_1^{\text{free}} - \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} \, D_2 \right)$ is the linear cost that depends on the other player's fixed sequence, $\mathbf{e}_1^{\text{free}} = \mathbf{R}_1 - \mathbf{U} \mathbf{x}[k]$ is the free-response tracking error, $C$ is the constraint matrix combining the box and rate-limit rows, and $[l_1, u_1]$ are the corresponding bounds.
 
-Similarly for Player~2:
+Player~2 then solves the analogous problem with the updated $D_1^{(\iota)}$ fixed:
 \begin{equation}
-(\mathbf{H}^T \bar{Q}_2 \mathbf{H} + \bar{R}_2) D_2 = \mathbf{H}^T \bar{Q}_2 (\mathbf{e}_2^{\text{free}} - \mathbf{H} D_1)
-\label{eq:best_response_2}
+D_2^{(\iota)} = \arg\min_{D_2} \; \frac{1}{2} D_2^{\top} P_2(\alpha) \, D_2 + q_2(\alpha, D_1^{(\iota)})^{\top} D_2
+\quad \text{s.t.} \quad C D_2 \in [l_2, u_2]
+\label{eq:qp_player2}
 \end{equation}
+where $P_2(\alpha) = 2 \left( \alpha[k] \, \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} + R_2 \, \mathbf{I}_{N_u} \right)$ is the Player~2 Hessian scaled by the Pustilnik--Borrelli factor $\alpha[k]$ of Eq.~\eqref{eq:pustilnik_alpha}, and $q_2(\alpha, D_1) = -2 \alpha[k] \left( \mathbf{H}^{\top} \bar{Q}_1 \, \mathbf{e}_2^{\text{free}} - \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} \, D_1 \right)$ is the corresponding linear cost. The scalar $\alpha[k]$ multiplies both the quadratic and the linear tracking terms of Player~2 uniformly, which is what makes the pre-computation of Section~\ref{sec:precomputed_grid} possible.
 
-These coupled equations could be solved iteratively through alternating optimization~\cite{li_shared_2019}. However, to achieve DPP compliance for real-time performance, the equilibrium is reformulated as a single stacked QP over $\mathbf{u} = [D_1^T, D_2^T]^T \in \mathbb{R}^{2N_u}$:
+The two coupled QPs of Eqs.~\eqref{eq:qp_player1}--\eqref{eq:qp_player2} are the discrete-time projection of the continuous-time best-response equations of the differential game.
+
+\subsection{IBR Loop and Convergence Criterion}
+\label{sec:ibr_loop}
+
+The IBR loop is initialized from a warm start $(D_1^{(0)}, D_2^{(0)})$ inherited from the previous cycle by a horizon shift (Section~\ref{sec:nash_warm}). Each subsequent iteration performs one solve of Eq.~\eqref{eq:qp_player1} followed by one solve of Eq.~\eqref{eq:qp_player2}. Convergence is declared when the largest change in either player's control sequence between successive iterations falls below a tolerance:
 \begin{equation}
-\min_{\mathbf{u}} \; \frac{1}{2} \mathbf{u}^T \mathbf{P} \mathbf{u} + \mathbf{q}^T \mathbf{u}
-\label{eq:stacked_qp}
+\Delta^{(\iota)} = \max\!\left( \left\| D_1^{(\iota)} - D_1^{(\iota-1)} \right\|_{\infty}, \; \left\| D_2^{(\iota)} - D_2^{(\iota-1)} \right\|_{\infty} \right) < \varepsilon_{\text{IBR}}
+\label{eq:ibr_convergence}
 \end{equation}
+where $\Delta^{(\iota)}$ is the infinity-norm best-response gap at iteration $\iota$ and $\varepsilon_{\text{IBR}} = 10^{-4}$ is the tolerance shared by both channels. A hard cap of $\iota_{\max} = 15$ iterations prevents runaway execution; in typical merge scenarios the loop converges in three to eight iterations because the warm start already lies close to the new optimum. If the maximum iteration count is reached without convergence, the last iterate is returned unchanged; the next cycle's warm start absorbs the residual gap and the loop typically converges within one or two additional iterations.
 
-\subsection{Stacked Hessian Structure}
+\subsection{Pre-Computed $\lambda$-Level Grid for DPP Compliance}
+\label{sec:precomputed_grid}
 
-The Hessian $\mathbf{P} \in \mathbb{R}^{2N_u \times 2N_u}$ has the block structure:
+The Player~2 Hessian $P_2(\alpha)$ depends on $\alpha[k]$ and therefore on $\lambda[k]$, which changes continuously. Rebuilding and re-factorizing the OSQP problem at every Nash cycle would violate the Disciplined Parametric Programming (DPP) contract that OSQP relies on for constant-time factorization reuse. Instead, the solver instantiates one OSQP problem per discrete $\lambda$ level and selects the closest level at runtime:
 \begin{equation}
-\mathbf{P} = \begin{bmatrix} \mathbf{P}_{11} & \mathbf{P}_{12} \\ \mathbf{P}_{12}^T & \mathbf{P}_{22} \end{bmatrix}
-\label{eq:P_block}
+i^{*}[k] = \arg\min_{i \in \{1, \ldots, L_\lambda\}} \; \left| \ln \Lambda_i - \ln \lambda[k] \right|
+\label{eq:lambda_snap}
 \end{equation}
-with blocks given by Eqs.~\eqref{eq:P11}--\eqref{eq:P22} and the off-diagonal cross-coupling:
+where $\Lambda = \{\Lambda_1, \ldots, \Lambda_{L_\lambda}\}$ is the pre-defined discrete $\lambda$ grid and $i^{*}[k]$ is the index of the closest grid point to $\lambda[k]$ in log-space. Log-space nearest-neighbor selection places the grid points at approximately equal relative distance, matching the multiplicative sensitivity of $\alpha = 1/(1+\lambda)$ to $\lambda$.
+
+The longitudinal channel uses $L_\lambda^{\text{long}} = 11$ pre-computed levels:
 \begin{equation}
-\mathbf{P}_{12} = c(\lambda) \cdot \mathbf{H}^T \bar{Q}_1 \mathbf{H}
-\label{eq:P12_full}
+\Lambda^{\text{long}} = \{0.1, \, 0.25, \, 0.5, \, 1.0, \, 2.0, \, 5.0, \, 10.0, \, 15.0, \, 30.0, \, 40.0, \, 50.0\}
+\label{eq:long_levels}
 \end{equation}
-where $c(\lambda) = \sqrt{\min(\lambda, 1)}$ ensures positive definiteness for small $\lambda$. Without this scaling, the Schur complement condition $\mathbf{P}_{22} - \mathbf{P}_{12}^T \mathbf{P}_{11}^{-1} \mathbf{P}_{12} \succ 0$ may fail when the weakened $\mathbf{P}_{22}$ (at small $\lambda$) cannot dominate the cross-coupling.
-
-The linear term $\mathbf{q}$ updates at each time step:
+and the lateral channel uses $L_\lambda^{\text{lat}} = 7$ pre-computed levels:
 \begin{equation}
-\mathbf{q} = \begin{bmatrix} -2 \, \mathbf{H}^T \bar{Q}_1 \, \mathbf{e}_1^{\text{free}} \\ -2\lambda \, \mathbf{H}^T \bar{Q}_1 \, \mathbf{e}_2^{\text{free}} \end{bmatrix}
-\label{eq:q_vector}
+\Lambda^{\text{lat}} = \{0.1, \, 0.25, \, 0.5, \, 1.0, \, 2.0, \, 5.0, \, 10.0\}
+\label{eq:lat_levels}
 \end{equation}
+Both grid ceilings match the sigmoid ceilings of Section~\ref{sec:authority_allocation}: $\Lambda_{11}^{\text{long}} = 50 = \lambda_{\max}^{\text{long}}$ and $\Lambda_7^{\text{lat}} = 10 = \lambda_{\max}^{\text{lat}}$. Every authority ratio produced by the allocator therefore lies within the pre-factored grid range, and the log-space snap of Eq.~\eqref{eq:lambda_snap} selects the nearest level without truncation. The uppermost levels correspond to $\alpha = 1/(1 + 50) \approx 0.0196$ for the longitudinal channel and $\alpha = 1/(1 + 10) \approx 0.0909$ for the lateral channel, which set the effective floors on Player~2's tracking weight under the highest allocator output.
 
-\subsection{DPP Compliance through Pre-computed Lambda Levels}
+At initialization, one OSQP problem instance is built and factorized per grid level $\Lambda_i$; at runtime, only the linear-cost vector $q_2$ of the selected instance is updated per IBR iteration, which is an $\mathcal{O}(N_u)$ operation. Player~1's problem does not depend on $\lambda$ and therefore uses a single OSQP instance.
 
-Since $\mathbf{P}$ depends on $\lambda$, DPP compliance requires pre-computing $\mathbf{P}$ for discrete $\lambda$ levels. At runtime, the closest level is selected in log-space:
+\subsection{Hessian Regularization}
+\label{sec:hessian_regularization}
+
+To prevent numerical singularity when the tracking-weight Hessian $\mathbf{H}^{\top} \bar{Q}_1 \mathbf{H}$ becomes ill-conditioned (for example, when the terminal weight dominates the running weight, or when the linearized state-space model produces near-zero directional response), a small diagonal regularization is added at construction:
 \begin{equation}
-\lambda_{\text{used}} = \arg\min_{\hat{\lambda} \in \Lambda} \left| \ln \hat{\lambda} - \ln \lambda[k] \right|
-\label{eq:lambda_selection}
+\left( \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} \right)_{\text{reg}} = \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} + \varepsilon_{\text{reg}} \, \mathbf{I}_{N_u}
+\label{eq:reg}
 \end{equation}
-
-For each $\hat{\lambda} \in \Lambda$, CVXPY caches the KKT factorization, and subsequent solves only require updating $\mathbf{q}$.
-
-\paragraph{Longitudinal levels.} $\Lambda_{\text{long}} = \{0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0\}$ (8 levels), covering the wide authority range $[0.1, 100]$.
-
-\paragraph{Lateral levels.} $\Lambda_{\text{lat}} = \{0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0\}$ (7 levels), reflecting the narrower authority range $[0.1, 10]$.
-
-\subsection{Positive Definiteness Guarantee}
-
-After constructing $\mathbf{P}$ for each level, the eigenvalues are verified. If $\lambda_{\min}(\mathbf{P}) < 10^{-6}$, regularization is applied:
-\begin{equation}
-\mathbf{P}_{\text{reg}} = \mathbf{P} + \max(10^{-4} - \lambda_{\min}(\mathbf{P}), \; \epsilon_{\text{reg}}) \cdot \mathbf{I}_{2N_u}
-\label{eq:regularization}
-\end{equation}
-where $\epsilon_{\text{reg}} = 10^{-5}$.
+where $\varepsilon_{\text{reg}} = 10^{-5}$ is the regularization coefficient applied once during the construction of the shared tracking-weight Hessian. This regularization is inherited by both $P_1$ and $P_2(\alpha)$ through their common $\mathbf{H}^{\top} \bar{Q}_1 \mathbf{H}$ term, and its magnitude is small enough that the equilibrium is unchanged to numerical precision while the positive-definiteness of both Hessians is guaranteed for every $\alpha > 0$.
 
 \subsection{Constraints}
+\label{sec:qp_constraints}
 
-\subsubsection{Longitudinal Constraints}
+The constraint matrix $C$ that appears in Eqs.~\eqref{eq:qp_player1}--\eqref{eq:qp_player2} encodes two families of constraints on the control sequence.
 
-Input bounds enforce physical acceleration limits:
+\paragraph{Box constraints.} Each element of $D_i$ is bounded to the physically admissible input range of player $i$. For the longitudinal channel, the box is $[u_{i,\min}, u_{i,\max}]$ where the bounds are tightened at every cycle from the vehicle's speed-dependent physical acceleration limits $a_{\min}(v_x)$ and $a_{\max}(v_x)$ obtained from the powertrain torque map and brake capacity. For the lateral channel, the box is $[\delta_{\min}, \delta_{\max}] = [-0.436, 0.436]\,\mathrm{rad}$ (approximately $\pm 25^\circ$), which corresponds to the mechanical steering-rack limits of the ego vehicle.
+
+\paragraph{Rate constraints.} Adjacent elements of $D_i$ are constrained to differ by no more than a per-step rate limit:
 \begin{equation}
--3.5 \leq u_1 \leq 2.5 \text{ m/s}^2, \quad -4.0 \leq u_2 \leq 3.0 \text{ m/s}^2
-\label{eq:long_bounds}
+\left| u_i[k+j] - u_i[k+j-1] \right| \leq \Delta u_i^{\max} \cdot T_s, \qquad j = 1, \ldots, N_u - 1
+\label{eq:rate_constraint}
 \end{equation}
-
-Rate constraints limit the change per time step to ensure comfort~\cite{rajamani_vehicle_2005}:
+where $\Delta u_i^{\max}$ is the per-second rate limit of player $i$ and $T_s$ is the Nash time step. For the longitudinal channel, $\Delta u_1^{\max} = 15\,\mathrm{m/s^3}$ (system) and $\Delta u_2^{\max} = 4\,\mathrm{m/s^3}$ (human, tightened to smooth the driver's inter-cycle response). For the lateral channel, the per-step rate limit is derived at runtime from a jerk cap:
 \begin{equation}
-|u_i[k+j] - u_i[k+j-1]| \leq \Delta u_{i,\max} \cdot T_s
-\label{eq:long_rate}
+\Delta \delta^{\max} = \frac{j^{\text{lat}}_{\max} \cdot T_s}{v_x}
+\label{eq:lat_rate_from_jerk}
 \end{equation}
-with $\Delta u_{1,\max} = 1.5$~m/s$^3$ and $\Delta u_{2,\max} = 2.0$~m/s$^3$.
+where $j^{\text{lat}}_{\max}$ is the lateral jerk cap ($5\,\mathrm{m/s^3}$ for the human, $7\,\mathrm{m/s^3}$ for the system, following the UN ECE-R79 §5.6.2--5.6.4 lateral-jerk envelope), $T_s$ is the lateral Nash time step, and $v_x$ is the current longitudinal speed. The speed-dependent form converts the physically meaningful jerk limit into a steering-angle rate limit that tightens as the vehicle speeds up.
 
-\subsubsection{Lateral Constraints}
+The additional first-step rate constraint $|u_i[k] - u_i^{\text{prev}}| \leq \Delta u_i^{\max} \cdot T_s$ preserves continuity with the last cycle's applied command.
 
-Steering angle bounds~\cite{rajamani_vehicle_2005}:
-\begin{equation}
--0.436 \leq \delta_i \leq 0.436 \text{ rad} \quad (\approx \pm 25^\circ)
-\label{eq:lat_bounds}
-\end{equation}
+\subsection{OSQP Solver Configuration}
+\label{sec:osqp_config}
 
-Steering rate constraint:
-\begin{equation}
-|\delta_i[k+j] - \delta_i[k+j-1]| \leq \dot{\delta}_{\max} \cdot T_s
-\label{eq:lat_rate}
-\end{equation}
-with $\dot{\delta}_{\max} = 0.262$~rad/s ($15^\circ$/ss). This value corresponds to the Audi TT steering system specification and ensures smooth steering transitions consistent with passenger comfort expectations.
+Both channels use the OSQP first-order splitting solver with warm starting enabled. The channel-specific tolerances and iteration caps are given in Table~\ref{tab:osqp_settings}.
 
-\subsection{Complete Algorithm}
+Two distinct iteration counts appear in this section, and it is important to distinguish them. The IBR cap $\iota_{\max} = 15$ defined in Section~\ref{sec:ibr_loop} bounds the number of \emph{outer} alternations between the two players' QPs. The OSQP maximum iterations in Table~\ref{tab:osqp_settings} bound the number of \emph{inner} ADMM iterations that each individual per-player QP solve runs within one IBR alternation. A single Nash cycle therefore performs at most $\iota_{\max} = 15$ outer IBR alternations, each invoking two OSQP solves (one per player) that themselves run up to $1000$ (longitudinal) or $600$ (lateral) internal iterations.
 
-Algorithm~\ref{alg:stacked_qp} presents the solution procedure, which is identical for both controllers, modulo the state-space model and constraint values.
+\begin{table}[ht]
+\centering
+\begin{tabular}{|l|c|c|}
+\hline
+\textbf{Parameter} & \textbf{Longitudinal} & \textbf{Lateral} \\
+\hline
+Absolute tolerance $\varepsilon_{\text{abs}}$ & $10^{-4}$ & $10^{-3}$ \\
+Relative tolerance $\varepsilon_{\text{rel}}$ & $10^{-4}$ & $10^{-3}$ \\
+Maximum iterations & $1000$ & $600$ \\
+Polishing & disabled & disabled \\
+Warm starting & enabled & enabled \\
+\hline
+\end{tabular}
+\caption{OSQP solver settings for the two Nash channels}
+\label{tab:osqp_settings}
+\end{table}
+
+Polishing is disabled because the warm-start iterate is close enough to the optimum that the additional refinement pass yields no measurable improvement in solution quality; disabling it saves approximately 20\% of the per-solve time. The looser lateral tolerance reflects the smaller absolute magnitude of the steering-angle solution (order $10^{-2}\,\mathrm{rad}$), for which sub-milliradian precision is already well below the actuator resolution.
+
+\subsection{Algorithm Summary}
+\label{sec:algorithm_summary}
+
+The full solve routine executed at every Nash cycle is summarized in Algorithm~\ref{alg:ibr_nash}. The routine is identical for the longitudinal and lateral channels; the two channels differ only in the state-space model, weight matrices, constraint values, and the $\lambda$-level grid described above.
 
 \begin{algorithm}[H]
-\caption{DPP-Compliant Nash Equilibrium via Stacked QP}
-\label{alg:stacked_qp}
+\caption{Nash Equilibrium via Iterative Best Response with Pre-Computed $\lambda$ Grid}
+\label{alg:ibr_nash}
 \begin{algorithmic}[1]
-\State \textbf{Initialization (once):}
-\State Build prediction matrices $\mathbf{U}$, $\mathbf{H}$ from $(\mathbf{A}, \mathbf{B}, \mathbf{C})$
-\State Compute base Hessian $\mathbf{H}^T \bar{Q}_1 \mathbf{H}$
-\For{each $\hat{\lambda} \in \Lambda$}
-    \State Build $\mathbf{P}(\hat{\lambda})$ using Eqs.~\eqref{eq:P11}--\eqref{eq:P12_full}
-    \State Verify $\mathbf{P} \succ 0$; regularize if needed (Eq.~\eqref{eq:regularization})
-    \State Create CVXPY problem with constant $\mathbf{P}$, parametric $\mathbf{q}$
+\State \textbf{Initialization (once, or on re-linearization):}
+\State Build prediction matrices $\mathbf{U}, \mathbf{H}$ from $(\mathbf{A}, \mathbf{B}, \mathbf{C})$ (Section~\ref{sec:dmpc}).
+\State Build shared Hessian $\mathbf{H}^{\top} \bar{Q}_1 \mathbf{H}$; regularize by Eq.~\eqref{eq:reg}.
+\State Build $P_1$ and instantiate one OSQP solver for Player~1.
+\For{each $\Lambda_i \in \Lambda$}
+    \State Compute $\alpha_i = 1/(1 + \Lambda_i)$.
+    \State Build $P_2(\alpha_i)$ per Eq.~\eqref{eq:qp_player2} and instantiate one OSQP solver.
 \EndFor
 \State
-\State \textbf{Runtime (each control cycle $k$):}
-\State \textbf{Input:} $\mathbf{x}[k]$, $\mathbf{R}_1$, $\mathbf{R}_2$, $\lambda[k]$
-\State Select $\lambda_{\text{used}} \gets \arg\min_{\hat{\lambda} \in \Lambda} |\ln \hat{\lambda} - \ln \lambda[k]|$
-\State Compute free errors: $\mathbf{e}_i^{\text{free}} = \mathbf{R}_i - \mathbf{U} \mathbf{x}[k]$
-\State Update $\mathbf{q}$ via Eq.~\eqref{eq:q_vector}
-\State Solve cached QP for $\lambda_{\text{used}}$ with warm start
-\State Extract first controls: $u_1^*[k]$, $u_2^*[k]$
-\State \Return $(u_1^*[k], u_2^*[k])$
+\State \textbf{Runtime (each Nash cycle $k$):}
+\State \textbf{Input:} $\mathbf{x}[k]$, references $\mathbf{R}_1, \mathbf{R}_2$, authority $\lambda[k]$, previous applied $u_1^{\text{prev}}, u_2^{\text{prev}}$.
+\State Snap: $i^{*} \leftarrow \arg\min_i |\ln \Lambda_i - \ln \lambda[k]|$ per Eq.~\eqref{eq:lambda_snap}.
+\State Compute free errors: $\mathbf{e}_i^{\text{free}} \leftarrow \mathbf{R}_i - \mathbf{U} \mathbf{x}[k]$ for $i = 1, 2$.
+\State Update box and rate bounds on both solvers from $u_i^{\text{prev}}$ and (for lateral) $v_x$.
+\State Load warm-start sequences $(D_1^{(0)}, D_2^{(0)})$ from horizon shift of previous cycle.
+\For{$\iota = 1, \ldots, \iota_{\max}$}
+    \State $q_1 \leftarrow -2 (\mathbf{H}^{\top} \bar{Q}_1 \mathbf{e}_1^{\text{free}} - \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} \, D_2^{(\iota-1)})$; update Player~1 OSQP linear cost.
+    \State $D_1^{(\iota)} \leftarrow$ OSQP solve of Eq.~\eqref{eq:qp_player1}.
+    \State $q_2 \leftarrow -2 \alpha_{i^{*}} (\mathbf{H}^{\top} \bar{Q}_1 \mathbf{e}_2^{\text{free}} - \mathbf{H}^{\top} \bar{Q}_1 \mathbf{H} \, D_1^{(\iota)})$; update Player~2 OSQP linear cost.
+    \State $D_2^{(\iota)} \leftarrow$ OSQP solve of Eq.~\eqref{eq:qp_player2} at level $i^{*}$.
+    \State $\Delta^{(\iota)} \leftarrow \max(\|D_1^{(\iota)} - D_1^{(\iota-1)}\|_\infty, \; \|D_2^{(\iota)} - D_2^{(\iota-1)}\|_\infty)$.
+    \If{$\Delta^{(\iota)} < \varepsilon_{\text{IBR}}$} \textbf{break} \EndIf
+\EndFor
+\State Shift $(D_1^{(\iota)}, D_2^{(\iota)})$ one step to warm-start the next cycle.
+\State \Return first-step controls $(u_1^{*}[k], u_2^{*}[k]) = (D_1^{(\iota)}[0], D_2^{(\iota)}[0])$.
 \end{algorithmic}
 \end{algorithm}
+
+The per-cycle computation is dominated by the two OSQP solves per IBR iteration. Both solves are warm-started; each takes on the order of hundreds of microseconds on a mid-range CPU, so the full IBR loop consistently completes within the $T_s = 0.1\,\mathrm{s}$ longitudinal cycle and the $T_s = 0.05\,\mathrm{s}$ lateral cycle.
 
 % ===================================================================
 \section{Reference Trajectory Generation}
 \label{sec:reference_generation}
 % ===================================================================
 
-\subsection{Longitudinal References}
+The Nash game of Section~\ref{sec:cost_functions} takes two references per cycle: $\mathbf{r}_1$ for the system (Player~1) and $\mathbf{r}_2$ for the human (Player~2). This section develops the trajectory generators that produce these references at every cycle of the longitudinal and lateral channels. Both channels share the same operating principle: $\mathbf{r}_1$ is derived from the safety-optimal platoon-following objective, while $\mathbf{r}_2$ is derived from a driver-behavior model that projects the human's current intent forward over the prediction horizon.
 
-\subsubsection{System Reference (Player 1)}
+\subsection{Longitudinal System Reference}
+\label{sec:long_sys_ref}
 
-The system reference maintains a safe following distance using the Constant Time Gap (CTG) spacing policy~\cite{rajamani_vehicle_2005}:
+The longitudinal system reference tracks a constant time-gap (CTG) spacing policy relative to the platoon leader, and switches between four regimes based on the current gap error and predicted time-to-collision.
+
+\paragraph{CTG spacing.} The desired inter-vehicle gap grows linearly with the ego speed:
 \begin{equation}
-d_{\text{des}}[k] = d_0 + h \cdot v_{\text{ego}}[k]
-\label{eq:ctg_spacing_v1}
+d_{\text{des}}[k] = s_0 + h \cdot v_x[k]
+\label{eq:ctg_spacing}
 \end{equation}
-where $d_0 = 5$~m is the standstill distance and $h = 1.5$~s is the time headway. The reference over the prediction horizon is:
-\begin{align}
-p_{\text{ref},1}[k+j] &= p_{\text{leader}}[k+j] - d_{\text{des}}[k+j] \label{eq:long_ref_pos}\\
-v_{\text{ref},1}[k+j] &= v_{\text{leader}}[k+j] \label{eq:long_ref_vel}
-\end{align}
+where $s_0 = 2.0\,\mathrm{m}$ is the standstill distance, $h = 1.5\,\mathrm{s}$ is the time headway (Rajamani~\cite{rajamaniVehicleDynamicsControl2005}), and $v_x[k]$ is the current ego longitudinal speed. When no explicit leader is present (join-before scenarios), a virtual leader at target speed replaces the missing vehicle, so the reference generator always has a well-defined tracking target.
 
-The leader's future trajectory is predicted assuming constant velocity, consistent with the IDM car-following model assumptions~\cite{treiber_congested_2000, treiberTrafficFlowDynamics2013}.
+\paragraph{Regime selection.} Given the current gap $g[k]$ and leader speed $v_L[k]$, the generator selects one of four regimes at every cycle:
+\begin{itemize}
+\item \textbf{Catchup} (leader significantly faster than ego): the reference is set to the leader's current speed for all $N_p$ horizon steps, so the Nash solver sees a sustained velocity error that drives the ego toward the leader's speed.
+\item \textbf{Cruise} (gap $> D_{\text{detect}} = 300\,\mathrm{m}$, no meaningful leader interaction): the reference acceleration follows the free-road branch of the intelligent driver model (IDM), $a = a_{\max}^{\text{IDM}} \left( 1 - (v_x / v_0)^{\delta} \right)$, with $a_{\max}^{\text{IDM}} = 0.553\,\mathrm{m/s^2}$, $v_0 = v_{\text{plat}} \cdot 1.05$, and $\delta = 4$~\cite{treiberCongestedTrafficStates2000, treiberTrafficFlowDynamics2013}.
+\item \textbf{Collision avoidance} ($\text{TTC} < 3\,\mathrm{s}$ or $gap_curr < gap_{\text{crit}}$ or $gap < gap_{\text{safe, dyn}}$): the reference acceleration is set to $a_{\min}(v_x)$, the maximum physically achievable deceleration. Routing hard-braking through the Player~1 reference (rather than through a direct actuator override) keeps the Nash solver producing a bounded and cooperative response consistent with the ISO 11270 §5.4 jerk envelope.
+\item \textbf{Transitional} (all other conditions): the acceleration is a Rajamani parabolic target velocity $v_{\text{target}} = v_L + \mathrm{sign}(e_g) \sqrt{2 a_{\text{comf}} |e_g|}$ ($a_{\text{comf}} = 1.5\,\mathrm{m/s^2}$) fed through a proportional velocity controller $a_{\text{parab}} = K_V (v_{\text{target}} - v_x)$, with $K_V = 0.4$. For small gap errors ($|e_g| < 5\,\mathrm{m}$) this parabolic term is quadratically blended with a CTG feedback correction $a_{\text{ctg}} = K_1^{\text{ctg}} e_g + K_2^{\text{ctg}} (v_L - v_x)$, using gains $K_1^{\text{ctg}} = 0.05$ and $K_2^{\text{ctg}} = 0.4$. In \textsc{Following}, if $|e_g| < 3\,\mathrm{m}$ the gap term is skipped entirely and the reference tracks the leader's velocity, which prevents Player~1 from generating a non-zero acceleration when the driver has released the pedal near the target gap.
+\end{itemize}
+The regime output is the reference acceleration $a_{\text{ref}}[k+j]$, which is integrated forward together with the leader's constant-velocity prediction $x_L[k+j] = x_L[k] + v_L[k] \cdot j \cdot T_s$ to produce the horizon reference $\mathbf{r}_1 = (p_{\text{ref}}[k+j], v_{\text{ref}}[k+j])_{j=1}^{N_p}$.
 
-\subsubsection{Human Reference (Player 2)}
+\subsection{Longitudinal Human Reference}
+\label{sec:long_human_ref}
 
-The human driver's longitudinal reference is generated by simulating the vehicle's behavior under platoon control for $N_p$ steps using a deep-copy forward simulation at the faster internal rate. This approach generates a realistic prediction of human intent from current conditions, consistent with human-driver modeling practices.
+The human reference $\mathbf{r}_2$ for the longitudinal channel projects the driver's current pedal input forward using a decayed auto-regressive process that converges to an IDM attractor. Three empirical findings from the driver-behavior literature shape the construction.
 
-\subsection{Lateral References}
-\label{sec:lateral_references}
+\paragraph{Measured entry acceleration.} At the current cycle, the acceleration $a_0$ is either the value produced by the driver's actual throttle and brake input (converted to acceleration through the vehicle's inverse powertrain map), or, in the \textsc{Approach} phase at low speed, the IDM free-road branch that prevents the reference from anchoring at rest. This entry value carries the immediate driver intent into the prediction.
 
-The lateral reference trajectories define smooth paths for the lane change maneuver. Both references are planned once at the start of the lane change and then tracked based on elapsed time, preventing oscillations caused by replanning from the current position.
-
-\subsubsection{System Reference: Quintic Polynomial}
-
-The system generates a quintic (5th-order) polynomial trajectory for maximum smoothness~\cite{gu_toward_2014}:
+\paragraph{IDM attractor.} The long-term equilibrium acceleration is computed from the current gap and relative velocity through the standard IDM equation:
 \begin{equation}
-y_{\text{ref},1}(\tau) = y_0 + \Delta y \cdot \left(10\tau^3 - 15\tau^4 + 6\tau^5\right)
-\label{eq:quintic_traj}
+a_{\text{IDM}}[k] = a_{\max}^{\text{IDM}} \left( 1 - \left( \frac{v_x}{v_0} \right)^\delta - \left( \frac{s^{*}(v_x, \Delta v)}{g} \right)^2 \right)
+\label{eq:idm_attractor}
 \end{equation}
-where $\tau = t / T_{\text{lc}} \in [0, 1]$ is the normalized time, $y_0$ is the starting lateral position, $\Delta y$ is the lane change distance, and $T_{\text{lc}}$ is the lane change duration.
+where $a_{\max}^{\text{IDM}} = 0.553\,\mathrm{m/s^2}$ is the IDM maximum acceleration, $v_0$ is the desired free-flow speed, $\delta = 4$ is the acceleration exponent, $g$ is the current gap, $\Delta v = v_x - v_L$ is the relative velocity to the leader, and $s^{*}(v_x, \Delta v) = s_0 + v_x T + v_x \Delta v / (2 \sqrt{a_{\max}^{\text{IDM}} \cdot b})$ is the desired dynamical spacing~\cite{treiberCongestedTrafficStates2000}. The comfortable braking deceleration is $b = 1.649\,\mathrm{m/s^2}$ and the desired time headway $T$ is the online-calibrated value produced by the driver estimator of Section~\ref{sec:nash_driver_calib}.
 
-The quintic polynomial has zero velocity and acceleration at both endpoints ($\dot{y}(0) = \dot{y}(T_{\text{lc}}) = 0$, $\ddot{y}(0) = \ddot{y}(T_{\text{lc}}) = 0$), ensuring smooth entry and exit from the lane change maneuver.
-
-\paragraph{Heading constraint on $T_{\text{lc}}$} A critical requirement is that the heading angle remains below a threshold throughout the maneuver. Since $\psi \approx \dot{y} / v_x$ for small angles~\cite{rajamani_vehicle_2005}, the maximum heading occurs at $\tau = 0.5$:
+\paragraph{AR(1) decay with truncated horizon.} Following Flad et al.~\cite{fladCooperativeSharedControl2017} and Na, Cole and Li~\cite{naTwoNashequilibriumbasedSteering2022}, the reference acceleration transitions from the measured entry value $a_0$ toward $a_{\text{IDM}}$ through a first-order auto-regressive process with time constant $\tau = 1.51\,\mathrm{s}$:
 \begin{equation}
-\dot{y}_{\max} = \frac{1.875 \, |\Delta y|}{T_{\text{lc}}}
-\label{eq:ydot_max_quintic}
+a_{\text{ref}}[k+j] = \alpha_{\text{AR}} \cdot a_{\text{ref}}[k+j-1] + (1 - \alpha_{\text{AR}}) \cdot a_{\text{IDM}}[k], \qquad j = 1, \ldots, 5
+\label{eq:ar1_decay}
 \end{equation}
+where $\alpha_{\text{AR}} = \exp(-T_s / \tau) \approx 0.936$ is the per-step decay factor at $T_s = 0.1\,\mathrm{s}$ and $a_{\text{ref}}[k+0] \equiv a_0$. Beyond step $j = 5$ ($\approx 0.5\,\mathrm{s}$ into the horizon), the reference is frozen at $a_{\text{ref}}[k+5]$; the empirical driver preview horizon of approximately half a second means that projecting the AR(1) further would produce far-fetched long-range intent~\cite{naTwoNashequilibriumbasedSteering2022}. The resulting acceleration profile is integrated forward to produce the position and velocity sequences that populate $\mathbf{r}_2 = (p_{\text{ref},2}[k+j], v_{\text{ref},2}[k+j])_{j=1}^{N_p}$.
 
-For $\psi < \psi_{\max}$, the minimum lane change duration must satisfy:
+\subsection{Lateral System Reference}
+\label{sec:lat_sys_ref}
+
+The lateral system reference generates smooth lane-change trajectories using Hermite polynomials that are locked to the maneuver entry state and rolled forward in wall-clock time. Two polynomial orders are used depending on the phase.
+
+\paragraph{Quintic Hermite (Merge).} During the \textsc{Merge} phase, a fifth-order Hermite polynomial produces the reference lateral position with matched entry velocity:
 \begin{equation}
-T_{\text{lc}} \geq \frac{1.875 \, |\Delta y|}{v_x \tan(\psi_{\max})}
-\label{eq:Tlc_constraint}
+y_{\text{ref}}(\tau) = y_0 + v_{y,0} T_{\text{lc}} \, \tau + c_3 \tau^3 + c_4 \tau^4 + c_5 \tau^5, \qquad \tau = t / T_{\text{lc}} \in [0, 1]
+\label{eq:quintic_merge}
 \end{equation}
+where $\tau$ is the normalized time, $t$ is the elapsed time since \textsc{Merge} entry, $T_{\text{lc}}$ is the total lane-change duration set at entry, $y_0$ is the lateral position at entry, $v_{y,0}$ is the lateral velocity at entry, and the coefficients $c_3 = 10 \Delta y - 6 v_{y,0} T_{\text{lc}}$, $c_4 = -15 \Delta y + 8 v_{y,0} T_{\text{lc}}$, $c_5 = 6 \Delta y - 3 v_{y,0} T_{\text{lc}}$ are derived from the boundary conditions $y(0) = y_0$, $\dot{y}(0) = v_{y,0}$, $\ddot{y}(0) = 0$, $y(T_{\text{lc}}) = y_0 + \Delta y$, $\dot{y}(T_{\text{lc}}) = \ddot{y}(T_{\text{lc}}) = 0$. The reference heading is $\psi_{\text{ref}}(\tau) = \dot{y}_{\text{ref}}(\tau) / v_x$, the small-angle projection of the polynomial's tangent onto the road frame~\cite{rajamaniVehicleDynamicsControl2005}. Setting the entry velocity $v_{y,0}$ from the measured lateral velocity, rather than fixing it to zero, means that the polynomial matches the vehicle's actual state at handover and avoids the initial-tangent discontinuity that a boundary-trivial quintic $\Delta y (10\tau^3 - 15\tau^4 + 6\tau^5)$ would introduce.
 
-With $\psi_{\max} \approx \SI{4}{\degree}$ ($0.070$~rad) for a normal driver, $|\Delta y| = 3.5$~m (one lane width), and $v_x = 20$~m/s, the quintic polynomial constraint yields $T_{\text{lc}} \geq 1.875 \times 3.5 / (20 \times \tan(0.070)) = 4.7$~s. The system reference duration is set to 1.5 times the corresponding human base duration, yielding 9.0~s (cautious), 6.75~s (normal), and 4.5~s (aggressive). These durations are dynamically adjusted if the heading constraint requires a longer maneuver, but in practice the personality-specific $\psi_{\max}$ values are calibrated to ensure compatibility with the base durations. These values are consistent with empirical lane change duration data: Toledo and Zohar~\cite{toledoModelingDurationLane2007} report average durations of 5--6~s for passenger cars, while Lee et al.~\cite{leeComprehensiveExaminationNaturalistic2004a} observe durations from 3~s (urgent) to over 8~s (cautious) in naturalistic driving.
-
-The heading reference is set to zero throughout: $\psi_{\text{ref},1} = 0$.
-
-\subsubsection{Human Reference: Cubic Polynomial}
-
-The human driver's reference uses a cubic (3rd-order) polynomial, reflecting the tendency of human drivers to execute lane changes more directly with less emphasis on smoothness at the endpoints~\cite{gu_toward_2014, hoffmannAutonomousAutomobileTrajectory2007}:
+\paragraph{Cubic Hermite (Approach, GapSearch, Following settle).} During the \textsc{Approach} and \textsc{GapSearch} phases, and during the residual lateral settling in \textsc{Following}, a cubic Hermite polynomial is used:
 \begin{equation}
-y_{\text{ref},2}(\tau) = y_0 + \Delta y \cdot \left(3\tau^2 - 2\tau^3\right)
-\label{eq:cubic_traj}
+y_{\text{ref}}(\tau) = y_0 + v_{y,0} T \, \tau + (3 \Delta y - 2 v_{y,0} T) \tau^2 + (- 2 \Delta y + v_{y,0} T) \tau^3
+\label{eq:cubic_gapsearch}
 \end{equation}
+where $T$ is the settling duration for the corresponding phase. The cubic order allows the boundary conditions on position and velocity to be satisfied without over-constraining the second derivative, which suits the small offsets typical of these phases.
 
-The cubic polynomial has zero velocity at the endpoints but non-zero acceleration, producing a sharper transition. The heading constraint is similarly enforced:
+\paragraph{Lane-change duration.} The duration $T_{\text{lc}}$ is set at \textsc{Merge} entry from the current lateral state, subject to two constraints:
 \begin{equation}
-T_{\text{lc}} \geq \frac{1.5 \, |\Delta y|}{v_x \tan(\psi_{\max})}
-\label{eq:Tlc_constraint_cubic}
+T_{\text{lc}}^{\text{sys}} = \max\!\left( T_{\min}, \; T_{\text{phys}} \right), \qquad T_{\text{phys}} = \begin{cases}
+\dfrac{2 |\Delta y|}{v_{y,0}} & v_{y,0} \cdot \mathrm{sign}(\Delta y) > 0.05\,\mathrm{m/s} \\[6pt]
+\dfrac{1.875 \, |\Delta y|}{v_x \, \tan \psi_{\max}} & \text{otherwise}
+\end{cases}
+\label{eq:tlc_selection}
 \end{equation}
+where $T_{\min} = 4\,\mathrm{s}$ is the absolute floor duration, $T_{\text{phys}}$ is the physically feasible duration under either the natural approach (when the lateral velocity already points toward the target) or the heading-constrained geometric fallback, and $\psi_{\max} = 4^\circ$ is the maximum heading angle allowed during the quintic maneuver. The coefficient $1.875$ in the geometric fallback is derived from the maximum $\dot{y}$ of the quintic $y = \Delta y (10\tau^3 - 15\tau^4 + 6\tau^5)$, which occurs at $\tau = 1/2$ and equals $1.875 \, \Delta y / T_{\text{lc}}$. The system reference thus guarantees $|\psi(\tau)| \leq \psi_{\max}$ throughout the maneuver, independent of the entry lateral velocity.
 
-The cubic coefficient (1.5 vs.\ 1.875 for quintic) means the human reference allows shorter lane change durations for the same heading constraint. Base durations depend on driver type: 6.0~s (cautious), 4.5~s (normal), 3.0~s (aggressive). Each driver type has a corresponding maximum heading angle calibrated from empirical lane change data~\cite{toledoModelingDurationLane2007, leeComprehensiveExaminationNaturalistic2004a}: cautious drivers maintain $\psi_{\max} \approx \SI{3}{\degree}$, normal drivers allow $\psi_{\max} \approx \SI{4}{\degree}$, and aggressive drivers tolerate $\psi_{\max} \approx \SI{6}{\degree}$.
+\subsection{Lateral Human Reference}
+\label{sec:lat_human_ref}
+
+The lateral human reference uses the same cubic and quintic Hermite structure as the system reference but with a tighter heading bound $\psi_{\max}^{\text{hum}} = 2.6^\circ$, following the naturalistic-lane-change data of Lee and Olsen~\cite{leeComprehensiveExaminationNaturalistic2004a}. The human duration is reduced correspondingly:
+\begin{equation}
+T_{\text{lc}}^{\text{hum}} = \max\!\left( T_{\min}, \; T_{\text{phys}} \cdot \tfrac{1.5}{1.875} \right)
+\label{eq:tlc_human}
+\end{equation}
+where the factor $1.5$ is the cubic maximum-$\dot{y}$ coefficient (analogous to the quintic $1.875$), and $T_{\min} = 4\,\mathrm{s}$ is the same absolute floor. The ratio $1.5 / 1.875 \approx 0.8$ therefore makes the human reference shorter than the system reference, reflecting the observation that human drivers execute lane changes more directly with less emphasis on smoothness at the endpoints~\cite{guHumanlikeMotionPlanning2014, hoffmannAutonomousAutomobileTrajectory2007}. The polynomial coefficients are otherwise identical to those of the system reference.
+
+The implementation does not include categorical driver-type presets (cautious, normal, aggressive) for the lateral reference, in contrast to the earlier formulations reported by Li et al.~\cite{liSharedControlNovel2019}. Driver individuality enters the lateral channel through the MOBIL politeness parameter that gates the lane-change decision~\cite{kestingGeneralLaneChangingModel2007} and through the online-calibrated longitudinal driver model of Section~\ref{sec:nash_driver_calib}; per-driver tuning of the lateral polynomial coefficients was found to be neither necessary nor observable during interactive runs with a Logitech G29 wheel.
+
+\subsection{MOBIL Lane-Change Decision}
+\label{sec:mobil_decision}
+
+The transition from lateral gap search to the active merge maneuver is gated by the MOBIL lane-change decision model of Kesting, Treiber, and Helbing~\cite{kestingGeneralLaneChangingModel2007, kestingMOBILGeneralLaneChanging}. MOBIL is invoked at every Nash cycle of the \textsc{GapSearch} phase, and its decision determines whether the target lateral gap is safe enough to commit to the quintic merge trajectory of Eq.~\eqref{eq:quintic_merge}. Only after MOBIL approves and the longitudinal state has synchronized to the platoon does the phase machine transition to \textsc{Merge}.
+
+\paragraph{Safety criterion.} The new follower behind the ego (once merged into the target lane) must not need to brake harder than a comfort threshold to maintain its own gap:
+\begin{equation}
+\tilde{a}_n \geq -b_{\text{safe}}
+\label{eq:mobil_safety}
+\end{equation}
+where $\tilde{a}_n$ is the IDM acceleration the new follower would produce if the ego were placed in the target lane at its current position and velocity, and $b_{\text{safe}} = 4\,\mathrm{m/s^2}$ is the comfort deceleration bound. If no follower is present in the target lane, the criterion is trivially satisfied.
+
+\paragraph{Gap criterion.} The physical gaps to the front and rear neighbors in the target lane must exceed a hard minimum $s_{\min}^{\text{mobil}} = 8\,\mathrm{m}$:
+\begin{equation}
+g_{\text{front}} = x_{\text{new}_\text{leader}} - x_{\text{ego}} - L \geq s_{\min}^{\text{mobil}}, \qquad g_{\text{rear}} = x_{\text{ego}} - x_{\text{new}_\text{follower}} - L \geq s_{\min}^{\text{mobil}}
+\label{eq:mobil_gap}
+\end{equation}
+where $x_{\text{ego}}$ is the ego longitudinal position, $x_{\text{new}_\text{leader}}$ and $x_{\text{new}_\text{follower}}$ are the longitudinal positions of the target-lane front and rear neighbors, and $L$ is the ego vehicle length. The gap check prevents a merge into an insufficient physical opening even when the IDM-based safety criterion of Eq.~\eqref{eq:mobil_safety} would still be satisfied through predictive braking of the new follower.
+
+\paragraph{Mandatory-mode approval.} For platoon merging the model runs in the mandatory-lane-change mode, which drops the incentive check that would otherwise gate discretionary changes:
+\begin{equation}
+\text{approved} \iff \left( \tilde{a}_n \geq -b_{\text{safe}} \right) \; \land \; \left( g_{\text{front}} \geq s_{\min}^{\text{mobil}} \right) \; \land \; \left( g_{\text{rear}} \geq s_{\min}^{\text{mobil}} \right)
+\label{eq:mobil_approval}
+\end{equation}
+where the three conjuncts are the safety criterion (Eq.~\eqref{eq:mobil_safety}) and the two gap criteria (Eq.~\eqref{eq:mobil_gap}). The mandatory formulation reflects the operational context: the driver has already committed to joining the platoon by pressing the merge trigger, so no additional utility gain (over remaining in the current lane) is required.
+
+\paragraph{Neighbor identification.} The ego's target-lane neighbors are determined at every check by sorting the platoon vehicles along the longitudinal axis and locating the ego's position relative to the sorted sequence. Three positional relationships are recognized: the ego may be ahead of the platoon (only a follower is defined), behind the platoon (only a leader is defined), or bracketed between two consecutive platoon vehicles (both neighbors are defined). This handles the three canonical merge geometries (join-before, join-after, and join-middle) with a single check.
+
+\paragraph{Coupling to phase transition.} MOBIL approval is a necessary but not sufficient condition for the \textsc{GapSearch}~$\to$~\textsc{Merge} transition. The phase machine additionally requires that the longitudinal velocity error to the immediate target-lane leader falls below a threshold ($|v_{\text{ego}} - v_L| < 5\,\mathrm{m/s}$) and that the relative gap error is below $40\%$ of the desired CTG spacing, both held for a minimum dwell time of $2\,\mathrm{s}$ in \textsc{GapSearch}. Once all three conditions co-occur, the lateral reference generator captures the current lateral state as the polynomial entry point (Eq.~\eqref{eq:quintic_merge}) and the phase transitions to \textsc{Merge}.
 
 \subsection{Phase-Dependent Reference Selection}
+\label{sec:phase_reference}
 
-Both lateral reference generators operate in five phases synchronized with the safety field:
+The phase state machine of Chapter~3 gates which reference-generation branch is active. Four phases are defined:
 \begin{enumerate}
-\item \textbf{CRUISE}: Reference at current lane position.
-\item \textbf{GAP\_SEARCH}: Gradual reference shift begins.
-\item \textbf{LANE\_CHANGE}: Full polynomial trajectory tracking.
-\item \textbf{LANE\_KEEPING}: Reference at target lane.
-\item \textbf{FOLLOWING}: Reference at target lane (longitudinal control dominant).
+\item \textbf{Approach}: The ego is under full manual control. The Nash solver is warm-started but does not act on the vehicle; the reference generators run at the physics rate to keep the warm-start iterates consistent with the current driver input.
+\item \textbf{GapSearch}: A merge has been armed but the target longitudinal gap is not yet established. The lateral reference regulates heading toward $\psi \to 0$ via the cubic polynomial with $\Delta y = 0$, and the longitudinal reference operates in the transitional regime.
+\item \textbf{Merge}: The target gap has been reached and the lane change is executing. The lateral reference switches to the quintic Hermite of Eq.~\eqref{eq:quintic_merge}, and the longitudinal reference tracks the platoon leader through the CTG spacing.
+\item \textbf{Following}: The ego has joined the platoon. Both references switch to steady-state platoon following, with the small residual lateral settling using the cubic Hermite of Eq.~\eqref{eq:cubic_gapsearch}.
 \end{enumerate}
 
-Phase transitions are detected using the criteria from the MOBIL lane change model~\cite{kesting_general_2007, kesting_mobil_nodate} and the lateral safety field (Chapter~3).
-
+The five-phase decomposition sometimes used in the shared-control literature (cruise, gap search, lane change, lane keeping, following) is here compressed to four by merging the cruise and approach regimes into a single manual-control phase, and by treating lane keeping as the initial subphase of following~\cite{kestingGeneralLaneChangingModel2007, kestingMOBILGeneralLaneChanging}. Phase transitions are detected by the MOBIL lane-change model and the driving safety field described in Chapter~3.
 % ===================================================================
-\section{Longitudinal vs.\ Lateral: Comparison Summary}
+\section{Longitudinal versus Lateral: Comparison Summary}
 \label{sec:comparison}
-% ===================================================================
 
-Table~\ref{tab:comparison} summarizes the key differences between the two controller implementations.
+The longitudinal and lateral Nash controllers share the same algorithmic skeleton: linearized state-space model, quadratic cost with authority-scaled human tracking weight, Iterative Best Response over a pre-factored $\lambda$ grid, and reference generation split between a system and a human channel. They differ in the state dimension, the time step, the numerical weights, and the driver-modeling mechanism. This section summarizes the differences across four families of parameters and comments on the design choices that motivate each split.
 
-\begin{table}[ht]
+\subsection{Model and Horizon}
+
+The two channels use different plant models and different prediction rates. The longitudinal channel uses a two-state double-integrator with drag; the lateral channel uses the four-state global-frame bicycle model. Table~\ref{tab:comparison_model} lists the resulting dimensions and the horizon parameters selected for each.
+
+\begin{table}[H]
 \centering
-\small
-\begin{tabular}{|l|c|c|}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|X|}
 \hline
 \textbf{Feature} & \textbf{Longitudinal} & \textbf{Lateral} \\
 \hline
-Plant model & Double integrator & Bicycle model~\cite{rajamani_vehicle_2005} \\
-State dimension $n_x$ & 2 & 4 \\
-Output dimension $n_z$ & 2 & 2 \\
-Control input & Acceleration [m/s$^2$] & Steering angle [rad] \\
+Plant model                                  & Double integrator with drag                     & Global-frame bicycle model~\cite{rajamaniVehicleDynamicsControl2005} \\
+State dimension $n_x$                        & $2$                                             & $4$                                    \\
+Output dimension $n_z$                       & $2$                                             & $2$                                    \\
+Control input                                & Acceleration $u\,[\mathrm{m/s^2}]$              & Steering angle $\delta\,[\mathrm{rad}]$ \\
+Nash time step $T_s$                         & $0.1\,\mathrm{s}$                               & $0.05\,\mathrm{s}$                     \\
+Prediction horizon $N_p T_s$                 & $2.0\,\mathrm{s}$                               & $1.0\,\mathrm{s}$                      \\
+Control horizon $N_u T_s$                    & $1.0\,\mathrm{s}$                               & $0.5\,\mathrm{s}$                      \\
+Re-linearization threshold                   & $\Delta v_x > 2\,\mathrm{m/s}$                  & every Nash cycle                       \\
 \hline
-$Q_1$ diagonal & [2500, 50] & [10, 10000] \\
-$R_1 = R_2$ & 800 & 50,000 \\
-$S_1 = S_2$ & 800 ($S = R$) & 50,000 ($S = R$) \\
-\hline
-$\lambda$ range & $[0.1, 100]$ & $[0.1, 10]$ \\
-$|\Lambda|$ & 8 levels & 7 levels \\
-Authority sources & Safety + Performance & Safety only \\
-Smoothing & Adaptive EMA & Fixed EMA + rate limit \\
-\hline
-Input bounds & $[-3.5, 2.5]$ m/s$^2$ & $\pm 0.436$ rad ($\pm 25^\circ$) \\
-Rate limit & 1.5 / 2.0 m/s$^3$ & 0.262 rad/s (15°/s) \\
-\hline
-System ref.\ & CTG spacing~\cite{rajamani_vehicle_2005} & Quintic polynomial~\cite{gu_toward_2014} \\
-Human ref.\ & Forward simulation & Cubic polynomial \\
-Driver types & Via reference only & Via $R_2$, $S_2$, $Q_y$ modifiers \\
-\hline
-OSQP tol. & $10^{-4}$ & $10^{-3}$ \\
-OSQP max iter. & 200 & 200 \\
-Typical solve time & 2--3 ms & 2--3 ms \\
-\hline
-\end{tabular}
-\caption{Comparison of longitudinal and lateral Nash equilibrium implementations}
-\label{tab:comparison}
+\end{tabularx}
+\caption{Model and horizon parameters of the two Nash controllers}
+\label{tab:comparison_model}
 \end{table}
 
+The choices of $T_s$, $N_p$, and $N_u$ reflect the different physical bandwidths of the two channels. Longitudinal accelerations propagate slowly through the powertrain, and the two-second prediction horizon at $10\,\mathrm{Hz}$ is well matched to the timescale on which platoon merges evolve. Lateral steering commands must resolve the faster yaw dynamics of the bicycle model, so the one-second horizon at $20\,\mathrm{Hz}$ preserves phase margin during lane changes at highway speed while keeping the per-cycle computation within the tighter budget.
+
+\subsection{Cost Weights}
+
+The tracking-weight matrices and effort penalties of the two channels are listed in Table~\ref{tab:comparison_cost}. The nominal $Q_1$ and terminal $Q_{1,T}$ diagonals set the tracking pressure on the two output components (position and velocity for the longitudinal channel; lateral position and heading for the lateral channel), and the horizon ramp coefficient $w_Q$ scales the running weight linearly from $1\times$ at $j=0$ to $w_Q \times$ at $j = N_p - 2$.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|X|}
+\hline
+\textbf{Feature} & \textbf{Longitudinal} & \textbf{Lateral} \\
+\hline
+Nominal $Q_1$ diagonal                       & $[Q_p, Q_v] = [5000, 1500]$                     & $[Q_y, Q_\psi] = [5000, 2000]$        \\
+Terminal $Q_{1,T}$ diagonal                  & $[50\,000, 6000]$                               & $[20\,000, 8000]$                     \\
+Horizon ramp $w_Q$                           & $2.0$                                           & $1.5$                                  \\
+$R_1$                                        & $75\,000$                                       & $250\,000$; $25\,000$ in \textsc{GapSearch} \\
+$R_2$ (adaptive)                             & $[40\,000, 120\,000]$                           & $[30\,000, 250\,000]$; $25\,000$ in \textsc{GapSearch} \\
+Cross-coupling $S_1, S_2$                    & not used                                        & not used                               \\
+\hline
+\end{tabularx}
+\caption{Cost weights of the two Nash controllers}
+\label{tab:comparison_cost}
+\end{table}
+
+The weight magnitudes differ by roughly three orders of magnitude between the two channels ($R_1^{\text{lat}} = 250\,000$ against $R_1^{\text{long}} = 75\,000$) because the two control inputs are on different physical scales: typical accelerations of order $1$--$2\,\mathrm{m/s^2}$ versus typical steering angles of order $10^{-2}\,\mathrm{rad}$. The scaled weights keep the equilibrium input magnitudes in their comfortable ranges without adjusting the underlying formulation.
+
+\subsection{Authority Allocation and Constraints}
+
+The authority ratio $\lambda[k]$ and its associated constraints on the control input are listed in Table~\ref{tab:comparison_authority}. The two channels share the three-stage allocator architecture developed in Section~\ref{sec:authority_allocation} but differ in the range, the sigmoid parameters, and the sources fused at the second stage.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|X|}
+\hline
+\textbf{Feature} & \textbf{Longitudinal} & \textbf{Lateral} \\
+\hline
+Authority range $[\lambda_{\min}, \lambda_{\max}]$ & $[0.1, 50]$                             & $[0.1, 10]$                            \\
+$\alpha$ range                               & $[0.0196, 0.909]$                               & $[0.0909, 0.909]$                      \\
+Pre-computed $\lambda$ levels                & $11$                                            & $7$                                    \\
+Force sigmoid $F_{\text{mid}}$, $k_s$        & $400\,\mathrm{N}$, $0.015\,\mathrm{N}^{-1}$     & $200\,\mathrm{N}$, $0.025\,\mathrm{N}^{-1}$ \\
+Authority sources                            & Safety + Swain--Rath performance                & Safety + lane-offset performance       \\
+Following cap                                & $\lambda_{\max}^{\text{fol}} = 20$              & not applied                            \\
+Input bounds                                 & Speed-dependent (powertrain map)                & $\pm 0.436\,\mathrm{rad}$ ($\pm 25^\circ$) \\
+Rate constraint (system, human)              & $\Delta u_1 = 15$, $\Delta u_2 = 4\,\mathrm{m/s^3}$ & $j^{\text{lat}}_{\text{sys}} = 7$, $j^{\text{lat}}_{\text{hum}} = 5\,\mathrm{m/s^3}$ (Eq.~\eqref{eq:lat_rate_from_jerk}) \\
+\hline
+\end{tabularx}
+\caption{Authority allocation and constraint parameters of the two Nash controllers}
+\label{tab:comparison_authority}
+\end{table}
+
+The narrower authority range of the lateral channel ($\lambda \in [0.1, 10]$ versus $\lambda \in [0.1, 50]$ for the longitudinal channel) reflects the operational split between the two domains: excessive system authority during a lane change produces abrupt steering corrections that would degrade passenger comfort, while the same is not true for graduated longitudinal braking. The rate constraints likewise follow the physical envelopeThe longitudinal rate bound is a static jerk limit set separately for the system input $u_1$ ($15\,\mathrm{m/s^3}$) and the human input $u_2$ ($4\,\mathrm{m/s^3}$), the tighter human bound damping inter-cycle oscillation in the driver's response. The lateral rate bound is instead derived at runtime by dividing a jerk cap by the current speed (Eq.~\eqref{eq:lat_rate_from_jerk}), with a system jerk cap $j^{\text{lat}}_{\text{sys}} = 7\,\mathrm{m/s^3}$ and a human jerk cap $j^{\text{lat}}_{\text{hum}} = 5\,\mathrm{m/s^3}$ that follow the UN ECE-R79 §5.6 lateral-jerk envelope.
+
+\subsection{References and Solver}
+
+The reference-generation mechanisms and the OSQP solver settings for the two channels are listed in Table~\ref{tab:comparison_ref_solver}. Both channels use the Iterative Best Response loop with the same outer-iteration cap and convergence tolerance, but the inner OSQP settings differ.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|X|}
+\hline
+\textbf{Feature} & \textbf{Longitudinal} & \textbf{Lateral} \\
+\hline
+System reference                             & CTG spacing, four-regime selection~\cite{rajamaniVehicleDynamicsControl2005} & Quintic Hermite~\cite{guHumanlikeMotionPlanning2014}, heading-limited $T_{\text{lc}}$ \\
+Human reference                              & AR(1) decay to IDM attractor~\cite{fladCooperativeSharedControl2017, naTwoNashequilibriumbasedSteering2022} & Cubic Hermite with $\psi_{\max}^{\text{hum}} = 2.6^\circ$~\cite{leeComprehensiveExaminationNaturalistic2004a} \\
+Driver individuality                         & Online IDM $T$ calibration                      & MOBIL politeness parameter             \\
+IBR $\iota_{\max}$, $\varepsilon_{\text{IBR}}$ & $15$, $10^{-4}$                               & $15$, $10^{-4}$                        \\
+Hessian regularization $\varepsilon_{\text{reg}}$ & $10^{-5}$                                  & $10^{-5}$                              \\
+OSQP tolerance, max iter                     & $10^{-4}$, $1000$                               & $10^{-3}$, $600$                       \\
+OSQP polishing                               & disabled                                        & disabled                               \\
+\hline
+\end{tabularx}
+\caption{Reference generation and solver settings of the two Nash controllers}
+\label{tab:comparison_ref_solver}
+\end{table}
+
+The two channels also differ in how driver individuality enters the game. The longitudinal channel adapts to the driver through online calibration of the IDM time-gap parameter $T$, which flows into the human reference $\mathbf{r}_2$ of Section~\ref{sec:long_human_ref}. The lateral channel exposes driver individuality only at the phase-transition level through the MOBIL politeness parameter (Section~\ref{sec:mobil_decision}); the polynomial coefficients of the lateral reference are not driver-specific, because interactive tests on a Logitech G29 wheel did not reveal a benefit from per-driver polynomial tuning. The looser OSQP tolerance on the lateral solver ($10^{-3}$ versus $10^{-4}$ for the longitudinal solver) reflects the smaller absolute magnitude of the steering-angle solution, for which sub-milliradian precision is already well below the actuator resolution.
 % ===================================================================
 \section{Summary}
 \label{sec:ch4_summary}
 % ===================================================================
 
-This chapter presented the complete game-theoretic framework for shared control during platoon merging in both the longitudinal and lateral domains. The Nash game is formulated with cross-coupling cost terms ($S_1$, $S_2$) that promote cooperative equilibria. The authority ratio $\lambda$ dynamically scales the human's cost based on risk assessed through the driving safety field~\cite{wang_driving_2015, wang_driving_2016}. The key methodological contributions are:
-\begin{enumerate}
-\item A DPP-compliant stacked QP formulation that solves the Nash equilibrium in approximately 2--3~ms, a 20- to 30-fold improvement over iterative best-response methods~\cite{li_shared_2019}.
-\item The $S = R$ cooperation principle, which applies universally to both the longitudinal and lateral domains. Setting $S_i = R_i$ for both players transforms the competitive Nash equilibrium into a cooperative one, enabling smooth convergence without domain-specific tuning of the cross-coupling ratio.
-\item Dual-source authority allocation combining sigmoid-based safety authority~\cite{wang_driving_2016} with hysteresis-based performance authority for the longitudinal controller.
-\item Heading-constrained reference trajectories that analytically guarantee the lane change satisfies $|\psi| < \psi_{\max}$ throughout the maneuver.
-\item Driver-type modifiers in the lateral controller that adjust the Nash game weights to model cautious, normal, and aggressive driving styles~\cite{li_shared_2019}.
-\end{enumerate}
+This chapter developed the game-theoretic framework for shared control during platoon merging, in both the longitudinal and lateral channels. The Nash game is formulated as a two-player finite-horizon quadratic optimization on the linearized vehicle dynamics of Chapter~2. Each player minimizes its own quadratic cost against its own reference trajectory, and coordination between the two players is produced by a scalar authority scaling of the human's tracking weight rather than by explicit cross-coupling matrices. The equilibrium is computed by an Iterative Best Response loop over a pre-factored $\lambda$ grid, which preserves real-time performance without sacrificing the game-theoretic structure. The main methodological choices are summarized below.
 
-\begin{table}[ht]
+\paragraph{Pustilnik--Borrelli authority mapping.} The authority ratio $\lambda[k]$ produced by the allocator of Section~\ref{sec:authority_allocation} enters the Nash game through the scaling factor $\alpha[k] = 1/(1 + \lambda[k])$ applied to the human's tracking weight $Q_2[k] = \alpha[k] \, Q_1$~\cite{pustilnikGeneralizedNashEquilibrium2025}. This mapping is bounded ($\alpha \in (0, 1]$) and monotonically decreasing, which guarantees positive-definiteness of Player~2's Hessian for every $\lambda \geq 0$ and preserves numerical stability of the solver across the full authority range.
+
+\paragraph{Iterative Best Response with pre-factored $\lambda$ grid.} Rather than reformulating the equilibrium as a stacked QP, the solver alternates two per-player OSQP calls at every Nash cycle. Each Player~2 solve reuses one of eleven pre-factored problem instances (seven for the lateral channel), one per discrete $\lambda$ level, selected by nearest-neighbor snap in log-space~\cite{pustilnikGeneralizedNashEquilibrium2025}. The construction removes the most expensive numerical step of the QP setup from the real-time execution path and keeps the per-cycle computation bounded independently of $\lambda[k]$.
+
+\paragraph{Heading-constrained lane-change references.} The lateral system reference uses a quintic Hermite polynomial locked to the maneuver entry state, with the total lane-change duration $T_{\text{lc}}$ set at entry to guarantee $|\psi(\tau)| \leq \psi_{\max}$ throughout the horizon (Section~\ref{sec:lat_sys_ref})~\cite{guHumanlikeMotionPlanning2014}. The polynomial matches the vehicle's actual lateral velocity at entry rather than assuming a zero-velocity handover, which eliminates the initial-tangent discontinuity that a boundary-trivial quintic would introduce.
+
+\paragraph{Empirically grounded human reference.} The longitudinal human reference is generated by an AR(1) decay from the measured pedal-derived acceleration toward an IDM attractor whose time-gap parameter is calibrated online during the run (Section~\ref{sec:long_human_ref})~\cite{fladCooperativeSharedControl2017, naTwoNashequilibriumbasedSteering2022, zhangBayesianCalibrationIntelligent2024}. The prediction is truncated at approximately half a second, in accordance with the observed driver preview horizon reported in the naturalistic-driving literature. The lateral human reference uses a cubic Hermite polynomial with a tighter heading bound $\psi_{\max}^{\text{hum}} = 2.6^\circ$~\cite{leeComprehensiveExaminationNaturalistic2004a}, reflecting the more direct trajectories that human drivers execute during lane changes.
+
+\paragraph{MOBIL-gated phase transition.} The transition from lateral gap search to the active merge maneuver is gated by the MOBIL mandatory-lane-change criterion, applied at every Nash cycle to the target-lane neighbors (Section~\ref{sec:mobil_decision})~\cite{kestingGeneralLaneChangingModel2007}. The criterion combines an IDM-based safety check on the new follower with a hard gap floor, which prevents the merge from committing to an infeasible opening even when the local safety margin would formally admit predictive braking.
+
+The nominal values of the parameters that appear in these mechanisms are summarized in Table~\ref{tab:all_parameters}. The adaptive quantities ($R_2$, $Q_1$ in the following phase, $T$ in the IDM attractor) inherit their update laws from the shared-control integration layer of Chapter~3 and are not repeated here.
+
+\begin{table}[H]
 \centering
-\small
-\begin{tabular}{|l|c|c|}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|l|X|X|}
 \hline
 \textbf{Parameter} & \textbf{Longitudinal} & \textbf{Lateral} \\
 \hline
-Prediction horizon $N_p$ & 20 (2.0 s) & 20 (1.0 s) \\
-Control horizon $N_u$ & 10 (1.0 s) & 10 (0.5 s) \\
-Time step $T_s$ & 0.1 s & 0.05 s \\
+Prediction horizon $N_p$ (steps, seconds) & $20$ ($2.0\,\mathrm{s}$)                        & $20$ ($1.0\,\mathrm{s}$)               \\
+Control horizon $N_u$ (steps, seconds)    & $10$ ($1.0\,\mathrm{s}$)                        & $10$ ($0.5\,\mathrm{s}$)               \\
+Nash time step $T_s$                      & $0.1\,\mathrm{s}$                               & $0.05\,\mathrm{s}$                     \\
 \hline
-$Q_{1,1}$ (pos / $y$) & 2500 & 10 \\
-$Q_{1,2}$ (vel / $\psi$) & 50 & 10,000 \\
-$R_1 = R_2$ & 800 & 50,000 \\
-$S_1 = S_2$ & 800 & 50,000 \\
+$Q_1$ diagonal (position, second component) & $[5000, 1500]$                                & $[5000, 2000]$                         \\
+$Q_{1,T}$ diagonal                        & $[50\,000, 6000]$                               & $[20\,000, 8000]$                      \\
+Horizon ramp $w_Q$                        & $2.0$                                           & $1.5$                                  \\
+$R_1$ (fixed)                             & $75\,000$                                       & $250\,000$ nominal; $25\,000$ in \textsc{GapSearch} \\
+$R_2$ (adaptive range)                    & $[40\,000, 120\,000]$                           & $[30\,000, 250\,000]$; $25\,000$ in \textsc{GapSearch} \\
 \hline
-$\lambda_{\min}$ / $\lambda_{\max}$ & 0.1 / 100 & 0.1 / 10 \\
-Sigmoid $k_s$ & 0.015 & 0.02 \\
-Sigmoid $F_{\text{mid}}$ & 400 N & 150 N \\
-$\alpha_{\text{base}}$ / $\alpha_{\text{fast}}$ & 0.05 / 0.12 & 0.02 (fixed) \\
-Hysteresis & $d_{\text{enter}}=3$m, $d_{\text{exit}}=1$m & N/A \\
-Rate limit & N/A & $+0.02$, $-0.01$ per step \\
+Authority range $[\lambda_{\min}, \lambda_{\max}]$ & $[0.1, 50]$                             & $[0.1, 10]$                            \\
+Pre-computed $\lambda$ levels             & $11$                                            & $7$                                    \\
+Sigmoid $F_{\text{mid}}$, $k_s$           & $400\,\mathrm{N}$, $0.015\,\mathrm{N}^{-1}$     & $200\,\mathrm{N}$, $0.025\,\mathrm{N}^{-1}$ \\
 \hline
-Regularization $\epsilon_{\text{reg}}$ & $10^{-5}$ & $10^{-5}$ \\
-OSQP $\epsilon_{\text{abs}}$, $\epsilon_{\text{rel}}$ & $10^{-4}$ & $10^{-3}$ \\
-OSQP max iter. & 200 & 200 \\
+Input bounds                              & Speed-dependent (powertrain map)                & $\pm 0.436\,\mathrm{rad}$ ($\pm 25^\circ$) \\
+Rate limits (system, human)               & $15$, $4\,\mathrm{m/s^3}$                       & $j^{\text{lat}}_{\text{sys}} = 7$, $j^{\text{lat}}_{\text{hum}} = 5\,\mathrm{m/s^3}$ \\
 \hline
-\end{tabular}
-\caption{Complete parameter summary for both Nash equilibrium solvers}
+IBR cap $\iota_{\max}$, tolerance $\varepsilon_{\text{IBR}}$ & $15$, $10^{-4}$              & $15$, $10^{-4}$                        \\
+Regularization $\varepsilon_{\text{reg}}$ & $10^{-5}$                                       & $10^{-5}$                              \\
+OSQP tolerance, max iter                  & $10^{-4}$, $1000$                               & $10^{-3}$, $600$                       \\
+\hline
+\end{tabularx}
+\caption{Nominal parameter summary for both Nash controllers. Adaptive updates to $R_2$ and $Q_1$ are developed in Chapter~3.}
 \label{tab:all_parameters}
 \end{table}
 
-%--------------------------------------------------------------
-% BIBLIOGRAPHY 
-%--------------------------------------------------------------
-
-\printbibliography
-
-%--------------------------------------------------------------
-% APPENDIX
-%--------------------------------------------------------------
-\appendix
-
+The framework developed in this chapter defines the closed-loop shared-control law used in the simulation experiments of Chapter~5. The next chapter integrates all four layers of the system, the plant model, the safety field, the authority allocator, and the Nash controller, into the Unity real-time environment, and reports the results of interactive runs with a human driver at the wheel.
 \chapter{Python Implementation}
 
 The complete Python implementation is available at: \texttt{[Repository link]}
